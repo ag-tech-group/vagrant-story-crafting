@@ -28,6 +28,7 @@ interface ItemPickerProps {
   onSelect: (name: string | null) => void
   placeholder?: string
   label?: string
+  formatType?: (type: string) => string
 }
 
 export function ItemPicker({
@@ -36,8 +37,10 @@ export function ItemPicker({
   onSelect,
   placeholder = "Select item...",
   label,
+  formatType,
 }: ItemPickerProps) {
   const [open, setOpen] = useState(false)
+  const selectedItem = value ? items.find((i) => i.name === value) : null
 
   // Group items by type, sorted by level within each group
   const groups = items.reduce<Record<string, PickerItem[]>>((acc, item) => {
@@ -71,6 +74,13 @@ export function ItemPicker({
                 <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
                   {value}
                 </span>
+                {selectedItem?.type && (
+                  <span className="text-muted-foreground shrink-0 text-xs">
+                    {formatType
+                      ? formatType(selectedItem.type)
+                      : selectedItem.type}
+                  </span>
+                )}
               </div>
             ) : (
               <span className="text-muted-foreground text-sm">

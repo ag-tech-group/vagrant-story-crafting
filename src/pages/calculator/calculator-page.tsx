@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   Plus,
   RotateCcw,
+  X,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -38,7 +39,15 @@ import {
 import { computeEffectiveStats, type ItemStats } from "@/lib/item-stats"
 import { cn } from "@/lib/utils"
 
-const MATERIALS = [
+const TYPE_LABELS: Record<string, string> = {
+  AxeMace: "Axe / Mace",
+}
+
+function typeLabel(type: string) {
+  return TYPE_LABELS[type] ?? type
+}
+
+const ALL_MATERIALS = [
   "Wood",
   "Leather",
   "Bronze",
@@ -47,6 +56,10 @@ const MATERIALS = [
   "Silver",
   "Damascus",
 ]
+
+const BLADE_MATS = ["Bronze", "Iron", "Hagane", "Silver", "Damascus"]
+const ARMOR_MATS = ["Leather", "Bronze", "Iron", "Hagane", "Silver", "Damascus"]
+const SHIELD_MATS = ["Wood", "Bronze", "Iron", "Hagane", "Silver", "Damascus"]
 
 // The API blade_type values don't match the material recipe type categories.
 // This maps API blade_type → material recipe input type.
@@ -201,6 +214,34 @@ export function CalculatorPage() {
     return map
   }, [allItems, recipes])
 
+  // Map item name → equipment category for material filtering
+  const equipCategoryMap = useMemo(() => {
+    const map = new Map<string, "blade" | "armor" | "shield">()
+    for (const w of weapons) map.set(fmt(w.field_name), "blade")
+    for (const a of armor) {
+      if (a.armor_type === "Shield") map.set(fmt(a.field_name), "shield")
+      else map.set(fmt(a.field_name), "armor")
+    }
+    // Handle recipe items not in weapons/armor (e.g. shields from crafting)
+    for (const r of recipes) {
+      for (const name of [r.input_1, r.input_2, r.result]) {
+        if (map.has(name)) continue
+        if (r.category === "shield") map.set(name, "shield")
+      }
+    }
+    return map
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weapons, armor, recipes])
+
+  function getMaterialsForItem(itemName: string | null): string[] {
+    if (!itemName) return ALL_MATERIALS
+    const cat = equipCategoryMap.get(itemName)
+    if (cat === "blade") return BLADE_MATS
+    if (cat === "shield") return SHIELD_MATS
+    if (cat === "armor") return ARMOR_MATS
+    return ALL_MATERIALS
+  }
+
   const CATEGORY_OPTIONS = [
     { value: "all", label: "All Equipment" },
     { value: "weapons", label: "Weapons" },
@@ -273,6 +314,16 @@ export function CalculatorPage() {
 
       return { ...match, orderMatters }
     }, [materialA, materialB, itemA, itemB, itemTypeMap, materialRecipes])
+
+  const resultCompareStats = useMemo(() => {
+    if (results.length === 0) return undefined
+    const base = itemStatsMap.get(results[0].result)
+    if (!base) return undefined
+    if (!materialResult) return base
+    const mat = materialMap.get(materialResult.result_material)
+    if (!mat) return base
+    return computeEffectiveStats(base, mat)
+  }, [results, itemStatsMap, materialResult, materialMap])
 
   // --- Reverse lookup ---
   const resultItems: PickerItem[] = useMemo(() => {
@@ -401,13 +452,23 @@ export function CalculatorPage() {
         </div>
         <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:items-stretch">
           <ItemCard
-            title="Item 1"
+            title="Slot 1"
             items={filteredItems}
             value={itemA}
-            onSelect={setItemA}
+            onSelect={(name) => {
+              setItemA(name)
+              if (
+                materialA &&
+                name &&
+                !getMaterialsForItem(name).includes(materialA)
+              )
+                setMaterialA(null)
+            }}
             material={materialA}
             onMaterialSelect={setMaterialA}
+            availableMaterials={getMaterialsForItem(itemA)}
             stats={itemA ? itemStatsMap.get(itemA) : undefined}
+            compareWith={resultCompareStats}
             materialData={materialA ? materialMap.get(materialA) : undefined}
           />
 
@@ -416,13 +477,23 @@ export function CalculatorPage() {
           </div>
 
           <ItemCard
-            title="Item 2"
+            title="Slot 2"
             items={filteredItems}
             value={itemB}
-            onSelect={setItemB}
+            onSelect={(name) => {
+              setItemB(name)
+              if (
+                materialB &&
+                name &&
+                !getMaterialsForItem(name).includes(materialB)
+              )
+                setMaterialB(null)
+            }}
             material={materialB}
             onMaterialSelect={setMaterialB}
+            availableMaterials={getMaterialsForItem(itemB)}
             stats={itemB ? itemStatsMap.get(itemB) : undefined}
+            compareWith={resultCompareStats}
             materialData={materialB ? materialMap.get(materialB) : undefined}
           />
 
@@ -446,12 +517,23 @@ export function CalculatorPage() {
                       ? computeEffectiveStats(resultStats, resultMat)
                       : resultStats
 
+                  const resultType = allItems.find(
+                    (i) => i.name === r.result
+                  )?.type
+
                   return (
                     <div key={r.id} className="space-y-3">
                       {/* Item name — mimics ItemPicker trigger */}
                       <div className="flex min-h-12 items-center gap-2 rounded-md border px-3 py-2">
                         <div className="bg-muted size-8 shrink-0 rounded" />
-                        <span className="text-sm font-medium">{r.result}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {r.result}
+                        </span>
+                        {resultType && (
+                          <span className="text-muted-foreground shrink-0 text-xs">
+                            {typeLabel(resultType)}
+                          </span>
+                        )}
                       </div>
                       {/* Material — mimics MaterialSelect */}
                       <div className="flex h-10 items-center gap-1.5 rounded-md border px-3">
@@ -535,13 +617,22 @@ export function CalculatorPage() {
             <ItemPicker
               items={reverseFilteredItems}
               value={targetItem}
-              onSelect={setTargetItem}
+              onSelect={(name) => {
+                setTargetItem(name)
+                if (
+                  targetMaterial &&
+                  name &&
+                  !getMaterialsForItem(name).includes(targetMaterial)
+                )
+                  setTargetMaterial(null)
+              }}
               placeholder="Search for a result item..."
+              formatType={typeLabel}
             />
           </div>
           <div className="sm:w-48">
             <MaterialSelect
-              materials={MATERIALS}
+              materials={getMaterialsForItem(targetItem)}
               value={targetMaterial}
               onSelect={setTargetMaterial}
             />
@@ -589,7 +680,9 @@ function ItemCard({
   onSelect,
   material,
   onMaterialSelect,
+  availableMaterials,
   stats,
+  compareWith,
   materialData,
 }: {
   title: string
@@ -598,12 +691,13 @@ function ItemCard({
   onSelect: (name: string | null) => void
   material: string | null
   onMaterialSelect: (material: string | null) => void
+  availableMaterials: string[]
   stats?: ItemStats
+  compareWith?: ItemStats
   materialData?: Material
 }) {
   const effectiveStats =
     stats && materialData ? computeEffectiveStats(stats, materialData) : stats
-
   return (
     <Card className="w-full flex-1">
       <CardHeader className="pb-3">
@@ -615,14 +709,19 @@ function ItemCard({
           value={value}
           onSelect={onSelect}
           placeholder={`Choose ${title.toLowerCase()}...`}
+          formatType={typeLabel}
         />
         <MaterialSelect
-          materials={MATERIALS}
+          materials={availableMaterials}
           value={material}
           onSelect={onMaterialSelect}
         />
         {effectiveStats && (
-          <StatDisplay stats={effectiveStats} showAffinities={!!materialData} />
+          <StatDisplay
+            stats={effectiveStats}
+            compareWith={compareWith}
+            showAffinities={!!materialData}
+          />
         )}
       </CardContent>
     </Card>
@@ -679,7 +778,10 @@ function ReverseTable({
               targetMaterial
                 ? [
                     ...new Set(row.original.materialCombos.map((c) => c.mat1)),
-                  ].sort((a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b))
+                  ].sort(
+                    (a, b) =>
+                      ALL_MATERIALS.indexOf(a) - ALL_MATERIALS.indexOf(b)
+                  )
                 : undefined
             }
           />
@@ -698,7 +800,10 @@ function ReverseTable({
               targetMaterial
                 ? [
                     ...new Set(row.original.materialCombos.map((c) => c.mat2)),
-                  ].sort((a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b))
+                  ].sort(
+                    (a, b) =>
+                      ALL_MATERIALS.indexOf(a) - ALL_MATERIALS.indexOf(b)
+                  )
                 : undefined
             }
           />
@@ -726,35 +831,47 @@ function ReverseTable({
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">
-          {rows.length} recipe{rows.length !== 1 && "s"} found
+      <div className="bg-card border-border/50 sticky top-14 z-10 space-y-3 border-b px-6 py-4">
+        <p className="text-center text-base font-semibold">
+          {table.getFilteredRowModel().rows.length} recipe
+          {table.getFilteredRowModel().rows.length !== 1 && "s"} found
           {targetMaterial && (
             <span className="text-muted-foreground font-normal">
               {" "}
               · showing material paths for {targetMaterial}
             </span>
           )}
-        </CardTitle>
-      </CardHeader>
-      {targetItem && (
-        <div className="bg-card border-border/50 sticky top-14 z-10 border-b px-6 py-2">
-          <SlotCell
-            name={targetItem}
-            type={itemTypeMap.get(targetItem)}
-            stats={itemStatsMap.get(targetItem)}
-          />
-        </div>
-      )}
-      <CardContent className="space-y-3 overflow-x-auto">
-        {rows.length > 0 && (
-          <Input
-            placeholder="Filter results..."
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="max-w-sm"
-          />
+        </p>
+        {targetItem && (
+          <div className="flex justify-center">
+            <SlotCell
+              name={targetItem}
+              type={itemTypeMap.get(targetItem)}
+              stats={itemStatsMap.get(targetItem)}
+            />
+          </div>
         )}
+        {rows.length > 0 && (
+          <div className="relative mx-auto max-w-sm">
+            <Input
+              placeholder="Filter results..."
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              className="pr-8"
+            />
+            {globalFilter && (
+              <button
+                type="button"
+                onClick={() => setGlobalFilter("")}
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      <CardContent className="space-y-3 overflow-x-auto">
         {rows.length > 0 ? (
           <table className="w-full text-sm">
             <thead>
@@ -764,10 +881,9 @@ function ReverseTable({
                     <th
                       key={header.id}
                       className={cn(
-                        "text-muted-foreground px-3 py-2 text-left font-medium",
+                        "text-muted-foreground w-1/2 px-3 py-2 text-center font-medium",
                         header.column.getCanSort() &&
-                          "cursor-pointer select-none",
-                        header.id === "tier" && "text-right"
+                          "cursor-pointer select-none"
                       )}
                       onClick={header.column.getToggleSortingHandler()}
                     >
@@ -793,13 +909,15 @@ function ReverseTable({
                 const lowestMat1 =
                   mat1s.length > 0
                     ? mat1s.sort(
-                        (a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b)
+                        (a, b) =>
+                          ALL_MATERIALS.indexOf(a) - ALL_MATERIALS.indexOf(b)
                       )[0]
                     : null
                 const lowestMat2 =
                   mat2s.length > 0
                     ? mat2s.sort(
-                        (a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b)
+                        (a, b) =>
+                          ALL_MATERIALS.indexOf(a) - ALL_MATERIALS.indexOf(b)
                       )[0]
                     : null
 
@@ -813,7 +931,7 @@ function ReverseTable({
                     title="Click to load into calculator"
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-3 py-2">
+                      <td key={cell.id} className="w-1/2 px-3 py-2 text-center">
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
@@ -859,11 +977,15 @@ function SlotCell({
   materials?: string[]
 }) {
   return (
-    <div>
+    <div className="inline-flex flex-col items-center">
       <div className="flex items-center gap-2">
         <div className="bg-muted size-6 shrink-0 rounded" />
         <span className="font-medium">{name}</span>
-        {type && <span className="text-muted-foreground text-xs">{type}</span>}
+        {type && (
+          <span className="text-muted-foreground text-xs">
+            {typeLabel(type)}
+          </span>
+        )}
       </div>
       {stats && (
         <div className="mt-0.5">
