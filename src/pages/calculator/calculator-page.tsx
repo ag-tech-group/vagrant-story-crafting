@@ -272,7 +272,6 @@ export function CalculatorPage() {
               materials={MATERIALS}
               value={materialA}
               onSelect={setMaterialA}
-              label="Material"
             />
           </CardContent>
         </Card>
@@ -296,7 +295,6 @@ export function CalculatorPage() {
               materials={MATERIALS}
               value={materialB}
               onSelect={setMaterialB}
-              label="Material"
             />
           </CardContent>
         </Card>
@@ -409,7 +407,6 @@ export function CalculatorPage() {
               materials={MATERIALS}
               value={targetMaterial}
               onSelect={setTargetMaterial}
-              label="Desired material"
             />
           </div>
         </div>
