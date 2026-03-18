@@ -10,7 +10,7 @@ export function RootErrorComponent({ error, reset }: ErrorComponentProps) {
   })
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-6 p-8">
+    <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
       <p className="text-muted-foreground text-sm font-medium tracking-widest uppercase">
         Something went wrong
       </p>

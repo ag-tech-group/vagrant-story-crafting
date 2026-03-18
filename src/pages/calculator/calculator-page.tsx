@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
+import { getRouteApi } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
   flexRender,
@@ -76,16 +77,50 @@ function toMaterialType(apiType: string): string {
   return MATERIAL_TYPE_MAP[apiType] ?? apiType
 }
 
+const routeApi = getRouteApi("/")
+
 export function CalculatorPage() {
-  const [itemA, setItemA] = useState<string | null>(null)
-  const [itemB, setItemB] = useState<string | null>(null)
-  const [materialA, setMaterialA] = useState<string | null>(null)
-  const [materialB, setMaterialB] = useState<string | null>(null)
-  const [targetItem, setTargetItem] = useState<string | null>(null)
-  const [targetMaterial, setTargetMaterial] = useState<string | null>(null)
-  const [categoryFilter, setCategoryFilter] = useState<string>("all")
-  const [reverseCategoryFilter, setReverseCategoryFilter] =
-    useState<string>("all")
+  const search = routeApi.useSearch()
+  const navigate = routeApi.useNavigate()
+
+  const updateSearch = useCallback(
+    (updates: Record<string, string | undefined>) =>
+      navigate({
+        search: (prev: Record<string, string | undefined>) => {
+          const next = { ...prev, ...updates }
+          for (const key of Object.keys(next)) {
+            if (!next[key]) delete next[key]
+          }
+          return next
+        },
+        replace: true,
+      }),
+    [navigate]
+  )
+
+  const itemA = search.s1 ?? null
+  const itemB = search.s2 ?? null
+  const materialA = search.m1 ?? null
+  const materialB = search.m2 ?? null
+  const targetItem = search.target ?? null
+  const targetMaterial = search.tmat ?? null
+  const categoryFilter = search.cat ?? "all"
+  const reverseCategoryFilter = search.rcat ?? "all"
+
+  const setItemA = (v: string | null) => updateSearch({ s1: v || undefined })
+  const setItemB = (v: string | null) => updateSearch({ s2: v || undefined })
+  const setMaterialA = (v: string | null) =>
+    updateSearch({ m1: v || undefined })
+  const setMaterialB = (v: string | null) =>
+    updateSearch({ m2: v || undefined })
+  const setTargetItem = (v: string | null) =>
+    updateSearch({ target: v || undefined })
+  const setTargetMaterial = (v: string | null) =>
+    updateSearch({ tmat: v || undefined })
+  const setCategoryFilter = (v: string) =>
+    updateSearch({ cat: v === "all" ? undefined : v })
+  const setReverseCategoryFilter = (v: string) =>
+    updateSearch({ rcat: v === "all" ? undefined : v })
 
   const { data: weapons = [] } = useQuery({
     queryKey: ["weapons"],
@@ -437,13 +472,15 @@ export function CalculatorPage() {
           </Select>
           <button
             type="button"
-            onClick={() => {
-              setItemA(null)
-              setItemB(null)
-              setMaterialA(null)
-              setMaterialB(null)
-              setCategoryFilter("all")
-            }}
+            onClick={() =>
+              updateSearch({
+                s1: undefined,
+                s2: undefined,
+                m1: undefined,
+                m2: undefined,
+                cat: undefined,
+              })
+            }
             className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
           >
             <RotateCcw className="size-3" />
@@ -639,11 +676,13 @@ export function CalculatorPage() {
           </div>
           <button
             type="button"
-            onClick={() => {
-              setTargetItem(null)
-              setTargetMaterial(null)
-              setReverseCategoryFilter("all")
-            }}
+            onClick={() =>
+              updateSearch({
+                target: undefined,
+                tmat: undefined,
+                rcat: undefined,
+              })
+            }
             className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
           >
             <RotateCcw className="size-3" />
@@ -659,11 +698,13 @@ export function CalculatorPage() {
             itemTypeMap={itemTypeMap}
             itemStatsMap={itemStatsMap}
             onLoadRecipe={(input1, input2, mat1, mat2) => {
-              setItemA(input1)
-              setItemB(input2)
-              setMaterialA(mat1)
-              setMaterialB(mat2)
-              setCategoryFilter("all")
+              updateSearch({
+                s1: input1 || undefined,
+                s2: input2 || undefined,
+                m1: mat1 || undefined,
+                m2: mat2 || undefined,
+                cat: undefined,
+              })
               window.scrollTo({ top: 0, behavior: "smooth" })
             }}
           />

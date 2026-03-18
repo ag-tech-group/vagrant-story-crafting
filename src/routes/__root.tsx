@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-router"
 import { Toaster } from "sonner"
 import { RootErrorComponent } from "@/components/error-boundary"
-import { NotFound } from "@/components/not-found"
 import { ThemeToggle } from "@/components/theme-toggle"
 
 const TanStackRouterDevtools = import.meta.env.PROD
@@ -24,7 +23,6 @@ interface RouterContext {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: RootComponent,
-  notFoundComponent: NotFound,
   errorComponent: RootErrorComponent,
 })
 
