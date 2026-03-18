@@ -22,6 +22,7 @@ const queryClient = new QueryClient({
 
 const router = createRouter({
   routeTree,
+  basepath: "/crafting",
   context: { queryClient },
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
