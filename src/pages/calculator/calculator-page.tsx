@@ -28,7 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { api, type CraftingRecipe, type MaterialRecipe } from "@/lib/api"
+import { StatDisplay } from "@/components/stat-display"
+import {
+  api,
+  type CraftingRecipe,
+  type Material,
+  type MaterialRecipe,
+} from "@/lib/api"
+import { computeEffectiveStats, type ItemStats } from "@/lib/item-stats"
 import { cn } from "@/lib/utils"
 
 const MATERIALS = [
@@ -56,13 +63,6 @@ function toMaterialType(apiType: string): string {
   return MATERIAL_TYPE_MAP[apiType] ?? apiType
 }
 
-function computeTier(delta1?: number, delta2?: number): number | undefined {
-  if (delta1 == null && delta2 == null) return undefined
-  if (delta1 == null) return delta2
-  if (delta2 == null) return delta1
-  return Math.min(delta1, delta2)
-}
-
 export function CalculatorPage() {
   const [itemA, setItemA] = useState<string | null>(null)
   const [itemB, setItemB] = useState<string | null>(null)
@@ -85,6 +85,10 @@ export function CalculatorPage() {
   const { data: recipes = [] } = useQuery({
     queryKey: ["crafting-recipes"],
     queryFn: () => api.craftingRecipes("limit=10000"),
+  })
+  const { data: materials = [] } = useQuery({
+    queryKey: ["materials"],
+    queryFn: api.materials,
   })
   const { data: materialRecipes = [] } = useQuery({
     queryKey: ["material-recipes"],
@@ -133,16 +137,6 @@ export function CalculatorPage() {
     return { allItems: items, itemLevelMap: levelMap }
   }, [weapons, armor])
 
-  type ItemStats = {
-    str: number
-    int: number
-    agi: number
-    range?: number
-    damage?: number
-    risk?: number
-    gem_slots?: number
-  }
-
   const itemStatsMap = useMemo(() => {
     const map = new Map<string, ItemStats>()
     for (const w of weapons) {
@@ -153,6 +147,7 @@ export function CalculatorPage() {
         range: w.range,
         damage: w.damage,
         risk: w.risk,
+        damage_type: w.damage_type,
       })
     }
     for (const a of armor) {
@@ -163,8 +158,25 @@ export function CalculatorPage() {
         gem_slots: a.gem_slots,
       })
     }
+    // Case-insensitive fallback for recipe names that differ from API
+    const lowerMap = new Map<string, ItemStats>()
+    for (const [k, v] of map) lowerMap.set(k.toLowerCase(), v)
+    for (const r of recipes) {
+      for (const name of [r.input_1, r.input_2, r.result]) {
+        if (!map.has(name)) {
+          const stats = lowerMap.get(name.toLowerCase())
+          if (stats) map.set(name, stats)
+        }
+      }
+    }
     return map
-  }, [weapons, armor])
+  }, [weapons, armor, recipes])
+
+  const materialMap = useMemo(() => {
+    const map = new Map<string, Material>()
+    for (const m of materials) map.set(m.name, m)
+    return map
+  }, [materials])
 
   const itemTypeMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -318,26 +330,14 @@ export function CalculatorPage() {
         }
       }
 
-      const resultType = itemTypeMap.get(r.result)
-      const resultLevel = itemLevelMap.get(r.result)
       const level1 = itemLevelMap.get(r.input_1)
       const level2 = itemLevelMap.get(r.input_2)
-      const delta1 =
-        resultLevel != null && level1 != null && type1 === resultType
-          ? resultLevel - level1
-          : undefined
-      const delta2 =
-        resultLevel != null && level2 != null && type2 === resultType
-          ? resultLevel - level2
-          : undefined
-      const tier = computeTier(delta1, delta2)
 
       return {
         id: r.id,
         input_1: r.input_1,
         input_2: r.input_2,
         category: r.category,
-        tier: tier ?? 0,
         materialCombos,
         searchText: [
           r.input_1,
@@ -400,47 +400,31 @@ export function CalculatorPage() {
           </button>
         </div>
         <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:items-stretch">
-          <Card className="w-full flex-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Item 1</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ItemPicker
-                items={filteredItems}
-                value={itemA}
-                onSelect={setItemA}
-                placeholder="Choose first item..."
-              />
-              <MaterialSelect
-                materials={MATERIALS}
-                value={materialA}
-                onSelect={setMaterialA}
-              />
-            </CardContent>
-          </Card>
+          <ItemCard
+            title="Item 1"
+            items={filteredItems}
+            value={itemA}
+            onSelect={setItemA}
+            material={materialA}
+            onMaterialSelect={setMaterialA}
+            stats={itemA ? itemStatsMap.get(itemA) : undefined}
+            materialData={materialA ? materialMap.get(materialA) : undefined}
+          />
 
           <div className="flex shrink-0 items-center">
             <Plus className="text-muted-foreground size-10" />
           </div>
 
-          <Card className="w-full flex-1">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Item 2</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ItemPicker
-                items={filteredItems}
-                value={itemB}
-                onSelect={setItemB}
-                placeholder="Choose second item..."
-              />
-              <MaterialSelect
-                materials={MATERIALS}
-                value={materialB}
-                onSelect={setMaterialB}
-              />
-            </CardContent>
-          </Card>
+          <ItemCard
+            title="Item 2"
+            items={filteredItems}
+            value={itemB}
+            onSelect={setItemB}
+            material={materialB}
+            onMaterialSelect={setMaterialB}
+            stats={itemB ? itemStatsMap.get(itemB) : undefined}
+            materialData={materialB ? materialMap.get(materialB) : undefined}
+          />
 
           <div className="flex shrink-0 items-center">
             <ArrowRight className="text-primary size-10" />
@@ -450,93 +434,70 @@ export function CalculatorPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Result</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3">
               {results.length > 0 ? (
-                <div className="space-y-4">
-                  {results.map((r) => {
-                    const resultLevel = itemLevelMap.get(r.result)
-                    const resultType = itemTypeMap.get(r.result)
-                    const typeA = itemA ? itemTypeMap.get(itemA) : undefined
-                    const typeB = itemB ? itemTypeMap.get(itemB) : undefined
-                    const fwdLevel1 = itemA
-                      ? itemLevelMap.get(itemA)
-                      : undefined
-                    const fwdLevel2 = itemB
-                      ? itemLevelMap.get(itemB)
-                      : undefined
-                    const fwdDelta1 =
-                      resultLevel != null &&
-                      fwdLevel1 != null &&
-                      typeA === resultType
-                        ? resultLevel - fwdLevel1
-                        : undefined
-                    const fwdDelta2 =
-                      resultLevel != null &&
-                      fwdLevel2 != null &&
-                      typeB === resultType
-                        ? resultLevel - fwdLevel2
-                        : undefined
-                    const tier = computeTier(fwdDelta1, fwdDelta2) ?? 0
+                results.map((r) => {
+                  const resultStats = itemStatsMap.get(r.result)
+                  const resultMat = materialResult
+                    ? materialMap.get(materialResult.result_material)
+                    : undefined
+                  const effectiveStats =
+                    resultStats && resultMat
+                      ? computeEffectiveStats(resultStats, resultMat)
+                      : resultStats
 
-                    return (
-                      <div key={r.id} className="space-y-4">
-                        {/* Item name — aligned with ItemPicker */}
-                        <div className="flex h-12 items-center gap-2 rounded-md border px-3">
-                          <div className="bg-muted size-8 shrink-0 rounded" />
-                          <span className="flex-1 text-sm font-medium">
-                            {r.result}
-                          </span>
-                          {resultLevel != null && (
-                            <span className="text-muted-foreground text-xs">
-                              Tier {resultLevel}
-                            </span>
-                          )}
-                          {tier != null && <TierValue value={tier} />}
-                        </div>
-                        {/* Material — always rendered to maintain height */}
-                        <div className="flex h-10 items-center gap-1.5 rounded-md border px-3">
-                          {materialResult ? (
-                            <>
-                              <MaterialBadge
-                                mat={materialResult.result_material}
-                              />
-                              {materialResult.orderMatters && (
-                                <span
-                                  className="text-xs text-amber-400"
-                                  title="Swapping slot order gives a different result"
-                                >
-                                  *
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">
-                              Select materials...
-                            </span>
-                          )}
-                        </div>
+                  return (
+                    <div key={r.id} className="space-y-3">
+                      {/* Item name — mimics ItemPicker trigger */}
+                      <div className="flex min-h-12 items-center gap-2 rounded-md border px-3 py-2">
+                        <div className="bg-muted size-8 shrink-0 rounded" />
+                        <span className="text-sm font-medium">{r.result}</span>
                       </div>
-                    )
-                  })}
-                  {materialResult?.orderMatters && (
-                    <p className="text-muted-foreground text-xs">
-                      * Slot order affects the result material
-                    </p>
-                  )}
-                </div>
+                      {/* Material — mimics MaterialSelect */}
+                      <div className="flex h-10 items-center gap-1.5 rounded-md border px-3">
+                        {materialResult ? (
+                          <>
+                            <MaterialBadge
+                              mat={materialResult.result_material}
+                            />
+                            {materialResult.orderMatters && (
+                              <span className="text-xs text-amber-400">*</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">
+                            Select materials...
+                          </span>
+                        )}
+                      </div>
+                      {/* Stats */}
+                      {effectiveStats && (
+                        <StatDisplay
+                          stats={effectiveStats}
+                          showAffinities={!!resultMat}
+                        />
+                      )}
+                    </div>
+                  )
+                })
               ) : (
-                <div className="space-y-4">
-                  <div className="flex h-12 items-center justify-center rounded-md border px-3">
+                <div className="space-y-3">
+                  <div className="flex min-h-12 items-center justify-center rounded-md border px-3">
                     <span className="text-muted-foreground text-sm">
                       {itemA && itemB ? "No recipe found" : "Select two items"}
                     </span>
                   </div>
                   <div className="flex h-10 items-center rounded-md border px-3">
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground text-sm">
                       Select materials...
                     </span>
                   </div>
                 </div>
+              )}
+              {materialResult?.orderMatters && (
+                <p className="text-muted-foreground text-xs">
+                  * Slot order affects the result material
+                </p>
               )}
             </CardContent>
           </Card>
@@ -605,12 +566,66 @@ export function CalculatorPage() {
             targetMaterial={targetMaterial}
             targetItem={targetItem}
             itemTypeMap={itemTypeMap}
-            itemLevelMap={itemLevelMap}
             itemStatsMap={itemStatsMap}
+            onLoadRecipe={(input1, input2, mat1, mat2) => {
+              setItemA(input1)
+              setItemB(input2)
+              setMaterialA(mat1)
+              setMaterialB(mat2)
+              setCategoryFilter("all")
+              window.scrollTo({ top: 0, behavior: "smooth" })
+            }}
           />
         )}
       </div>
     </div>
+  )
+}
+
+function ItemCard({
+  title,
+  items,
+  value,
+  onSelect,
+  material,
+  onMaterialSelect,
+  stats,
+  materialData,
+}: {
+  title: string
+  items: PickerItem[]
+  value: string | null
+  onSelect: (name: string | null) => void
+  material: string | null
+  onMaterialSelect: (material: string | null) => void
+  stats?: ItemStats
+  materialData?: Material
+}) {
+  const effectiveStats =
+    stats && materialData ? computeEffectiveStats(stats, materialData) : stats
+
+  return (
+    <Card className="w-full flex-1">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <ItemPicker
+          items={items}
+          value={value}
+          onSelect={onSelect}
+          placeholder={`Choose ${title.toLowerCase()}...`}
+        />
+        <MaterialSelect
+          materials={MATERIALS}
+          value={material}
+          onSelect={onMaterialSelect}
+        />
+        {effectiveStats && (
+          <StatDisplay stats={effectiveStats} showAffinities={!!materialData} />
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -621,7 +636,6 @@ type ReverseRow = {
   input_1: string
   input_2: string
   category: string
-  tier: number
   materialCombos: { mat1: string; mat2: string }[]
   searchText: string
 }
@@ -631,27 +645,22 @@ function ReverseTable({
   targetMaterial,
   targetItem,
   itemTypeMap,
-  itemLevelMap,
   itemStatsMap,
+  onLoadRecipe,
 }: {
   rows: ReverseRow[]
   targetMaterial: string | null
   targetItem: string | null
   itemTypeMap: Map<string, string>
-  itemLevelMap: Map<string, number>
-  itemStatsMap: Map<
-    string,
-    {
-      str: number
-      int: number
-      agi: number
-      range?: number
-      damage?: number
-      risk?: number
-      gem_slots?: number
-    }
-  >
+  itemStatsMap: Map<string, ItemStats>
+  onLoadRecipe: (
+    input1: string,
+    input2: string,
+    mat1: string | null,
+    mat2: string | null
+  ) => void
 }) {
+  const resultStats = targetItem ? itemStatsMap.get(targetItem) : undefined
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState("")
 
@@ -664,8 +673,8 @@ function ReverseTable({
           <SlotCell
             name={row.original.input_1}
             type={itemTypeMap.get(row.original.input_1)}
-            level={itemLevelMap.get(row.original.input_1)}
             stats={itemStatsMap.get(row.original.input_1)}
+            compareWith={resultStats}
             materials={
               targetMaterial
                 ? [
@@ -683,8 +692,8 @@ function ReverseTable({
           <SlotCell
             name={row.original.input_2}
             type={itemTypeMap.get(row.original.input_2)}
-            level={itemLevelMap.get(row.original.input_2)}
             stats={itemStatsMap.get(row.original.input_2)}
+            compareWith={resultStats}
             materials={
               targetMaterial
                 ? [
@@ -695,13 +704,8 @@ function ReverseTable({
           />
         ),
       },
-      {
-        accessorKey: "tier",
-        header: "Tier Change",
-        cell: ({ getValue }) => <TierValue value={getValue<number>()} />,
-      },
     ],
-    [targetMaterial, itemTypeMap, itemLevelMap, itemStatsMap]
+    [targetMaterial, itemTypeMap, itemStatsMap, resultStats]
   )
 
   const table = useReactTable({
@@ -738,7 +742,6 @@ function ReverseTable({
           <SlotCell
             name={targetItem}
             type={itemTypeMap.get(targetItem)}
-            level={itemLevelMap.get(targetItem)}
             stats={itemStatsMap.get(targetItem)}
           />
         </div>
@@ -764,7 +767,7 @@ function ReverseTable({
                         "text-muted-foreground px-3 py-2 text-left font-medium",
                         header.column.getCanSort() &&
                           "cursor-pointer select-none",
-                        header.id === "tier_change" && "text-right"
+                        header.id === "tier" && "text-right"
                       )}
                       onClick={header.column.getToggleSortingHandler()}
                     >
@@ -783,27 +786,43 @@ function ReverseTable({
               ))}
             </thead>
             <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-border/50 border-b last:border-0"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td
-                      key={cell.id}
-                      className={cn(
-                        "px-3 py-2",
-                        cell.column.id === "tier_change" && "text-right"
-                      )}
-                    >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              {table.getRowModel().rows.map((row) => {
+                const r = row.original
+                const mat1s = r.materialCombos.map((c) => c.mat1)
+                const mat2s = r.materialCombos.map((c) => c.mat2)
+                const lowestMat1 =
+                  mat1s.length > 0
+                    ? mat1s.sort(
+                        (a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b)
+                      )[0]
+                    : null
+                const lowestMat2 =
+                  mat2s.length > 0
+                    ? mat2s.sort(
+                        (a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b)
+                      )[0]
+                    : null
+
+                return (
+                  <tr
+                    key={row.id}
+                    className="border-border/50 hover:bg-muted/30 cursor-pointer border-b last:border-0"
+                    onClick={() =>
+                      onLoadRecipe(r.input_1, r.input_2, lowestMat1, lowestMat2)
+                    }
+                    title="Click to load into calculator"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-3 py-2">
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         ) : (
@@ -829,42 +848,26 @@ const MAT_BADGE_COLORS: Record<string, string> = {
 function SlotCell({
   name,
   type,
-  level,
   stats,
+  compareWith,
   materials,
 }: {
   name: string
   type?: string
-  level?: number
-  stats?: {
-    str: number
-    int: number
-    agi: number
-    range?: number
-    damage?: number
-    risk?: number
-    gem_slots?: number
-  }
+  stats?: ItemStats
+  compareWith?: ItemStats
   materials?: string[]
 }) {
   return (
     <div>
       <div className="flex items-center gap-2">
+        <div className="bg-muted size-6 shrink-0 rounded" />
         <span className="font-medium">{name}</span>
         {type && <span className="text-muted-foreground text-xs">{type}</span>}
-        {level != null && (
-          <span className="text-muted-foreground text-xs">Tier {level}</span>
-        )}
       </div>
       {stats && (
-        <div className="text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0 text-[11px]">
-          <span>STR {stats.str}</span>
-          <span>INT {stats.int}</span>
-          <span>AGI {stats.agi}</span>
-          {stats.range != null && <span>RNG {stats.range}</span>}
-          {stats.damage != null && <span>DMG {stats.damage}</span>}
-          {stats.risk != null && <span>RSK {stats.risk}</span>}
-          {stats.gem_slots != null && <span>Gems {stats.gem_slots}</span>}
+        <div className="mt-0.5">
+          <StatDisplay stats={stats} compareWith={compareWith} compact />
         </div>
       )}
       {materials && materials.length > 0 && (
@@ -878,15 +881,6 @@ function SlotCell({
   )
 }
 
-function TierValue({ value }: { value: number }) {
-  if (value === 0) return <span className="text-muted-foreground">0</span>
-  return (
-    <span className={value > 0 ? "text-green-400" : "text-red-400"}>
-      {value > 0 ? `+${value}` : value}
-    </span>
-  )
-}
-
 function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
   if (sorted === "asc") return <ArrowUp className="size-3.5" />
   if (sorted === "desc") return <ArrowDown className="size-3.5" />
@@ -897,7 +891,7 @@ function MaterialBadge({ mat }: { mat: string }) {
   return (
     <span
       className={cn(
-        "rounded border px-1.5 py-0.5 text-[11px] leading-tight font-medium",
+        "rounded border px-1.5 py-0.5 text-xs font-medium",
         MAT_BADGE_COLORS[mat] ?? "bg-muted"
       )}
     >

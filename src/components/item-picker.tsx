@@ -71,14 +71,6 @@ export function ItemPicker({
                 <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
                   {value}
                 </span>
-                {(() => {
-                  const selected = items.find((i) => i.name === value)
-                  return selected?.level != null ? (
-                    <span className="text-muted-foreground text-xs">
-                      Tier {selected.level}
-                    </span>
-                  ) : null
-                })()}
               </div>
             ) : (
               <span className="text-muted-foreground text-sm">
@@ -129,11 +121,6 @@ export function ItemPicker({
                     >
                       <div className="bg-muted size-6 rounded" />
                       <span className="flex-1">{item.name}</span>
-                      {item.level != null && (
-                        <span className="text-muted-foreground text-xs">
-                          {item.level}
-                        </span>
-                      )}
                       <Check
                         className={cn(
                           "ml-auto size-4",

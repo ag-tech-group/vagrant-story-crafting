@@ -8,14 +8,14 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
-const MATERIAL_COLORS: Record<string, string> = {
-  Wood: "bg-amber-800",
-  Leather: "bg-amber-600",
-  Bronze: "bg-orange-500",
-  Iron: "bg-slate-400",
-  Hagane: "bg-blue-400",
-  Silver: "bg-gray-300",
-  Damascus: "bg-purple-400",
+const MATERIAL_BADGE_COLORS: Record<string, string> = {
+  Wood: "bg-amber-900/60 text-amber-200 border-amber-700/50",
+  Leather: "bg-amber-700/60 text-amber-100 border-amber-600/50",
+  Bronze: "bg-orange-600/60 text-orange-100 border-orange-500/50",
+  Iron: "bg-slate-500/60 text-slate-100 border-slate-400/50",
+  Hagane: "bg-blue-600/60 text-blue-100 border-blue-500/50",
+  Silver: "bg-gray-300/70 text-gray-900 border-gray-400/50",
+  Damascus: "bg-purple-600/60 text-purple-100 border-purple-500/50",
 }
 
 interface MaterialSelectProps {
@@ -46,15 +46,14 @@ export function MaterialSelect({
           <SelectContent>
             {materials.map((mat) => (
               <SelectItem key={mat} value={mat}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className={cn(
-                      "size-3 rounded-full",
-                      MATERIAL_COLORS[mat] || "bg-muted"
-                    )}
-                  />
+                <span
+                  className={cn(
+                    "rounded border px-1.5 py-0.5 text-xs font-medium",
+                    MATERIAL_BADGE_COLORS[mat] ?? "bg-muted"
+                  )}
+                >
                   {mat}
-                </div>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
