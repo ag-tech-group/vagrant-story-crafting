@@ -94,20 +94,128 @@ export function StatDisplay({
       {showAffinities && "human" in stats && (
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap gap-1.5">
-            <Stat label="Hum" value={stats.human ?? 0} compact />
-            <Stat label="Bst" value={stats.beast ?? 0} compact />
-            <Stat label="Und" value={stats.undead ?? 0} compact />
-            <Stat label="Phm" value={stats.phantom ?? 0} compact />
-            <Stat label="Drg" value={stats.dragon ?? 0} compact />
-            <Stat label="Evl" value={stats.evil ?? 0} compact />
+            <Stat
+              label="Hum"
+              value={stats.human ?? 0}
+              compare={
+                compareWith && "human" in compareWith
+                  ? compareWith.human
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Bst"
+              value={stats.beast ?? 0}
+              compare={
+                compareWith && "beast" in compareWith
+                  ? compareWith.beast
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Und"
+              value={stats.undead ?? 0}
+              compare={
+                compareWith && "undead" in compareWith
+                  ? compareWith.undead
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Phm"
+              value={stats.phantom ?? 0}
+              compare={
+                compareWith && "phantom" in compareWith
+                  ? compareWith.phantom
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Drg"
+              value={stats.dragon ?? 0}
+              compare={
+                compareWith && "dragon" in compareWith
+                  ? compareWith.dragon
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Evl"
+              value={stats.evil ?? 0}
+              compare={
+                compareWith && "evil" in compareWith
+                  ? compareWith.evil
+                  : undefined
+              }
+              compact
+            />
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Stat label="Fir" value={stats.fire ?? 0} compact />
-            <Stat label="Wat" value={stats.water ?? 0} compact />
-            <Stat label="Wnd" value={stats.wind ?? 0} compact />
-            <Stat label="Ear" value={stats.earth ?? 0} compact />
-            <Stat label="Lit" value={stats.light ?? 0} compact />
-            <Stat label="Drk" value={stats.dark ?? 0} compact />
+            <Stat
+              label="Fir"
+              value={stats.fire ?? 0}
+              compare={
+                compareWith && "fire" in compareWith
+                  ? compareWith.fire
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Wat"
+              value={stats.water ?? 0}
+              compare={
+                compareWith && "water" in compareWith
+                  ? compareWith.water
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Wnd"
+              value={stats.wind ?? 0}
+              compare={
+                compareWith && "wind" in compareWith
+                  ? compareWith.wind
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Ear"
+              value={stats.earth ?? 0}
+              compare={
+                compareWith && "earth" in compareWith
+                  ? compareWith.earth
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Lit"
+              value={stats.light ?? 0}
+              compare={
+                compareWith && "light" in compareWith
+                  ? compareWith.light
+                  : undefined
+              }
+              compact
+            />
+            <Stat
+              label="Drk"
+              value={stats.dark ?? 0}
+              compare={
+                compareWith && "dark" in compareWith
+                  ? compareWith.dark
+                  : undefined
+              }
+              compact
+            />
           </div>
         </div>
       )}
@@ -127,14 +235,14 @@ function Stat({
   compact?: boolean
 }) {
   const diff = compare != null ? compare - value : undefined
-  const size = compact ? "min-w-9 px-1.5 py-1" : "min-w-11 px-2 py-1.5"
+  const size = compact ? "min-w-10 px-1.5 py-1" : "min-w-11 px-2 py-1.5"
 
   return (
     <div className={cn("bg-muted/50 flex flex-col items-center rounded", size)}>
       <span
         className={cn(
           "text-muted-foreground leading-none",
-          compact ? "text-[10px]" : "text-xs"
+          compact ? "text-[11px]" : "text-xs"
         )}
       >
         {label}
@@ -142,7 +250,7 @@ function Stat({
       <span
         className={cn(
           "leading-tight font-medium",
-          compact ? "text-xs" : "text-sm",
+          "text-sm",
           value > 0 && "text-green-400",
           value < 0 && "text-red-400",
           value === 0 && "text-muted-foreground"
@@ -154,7 +262,7 @@ function Stat({
         <span
           className={cn(
             "leading-none font-medium",
-            compact ? "text-[10px]" : "text-xs",
+            "text-xs",
             diff > 0 ? "text-green-400" : "text-red-400"
           )}
         >

@@ -184,13 +184,13 @@ export function MaterialsPage() {
         {/* Type pair selector */}
         {category !== "Shields" && (
           <Card>
-            <CardContent className="flex items-center gap-3 pt-6">
-              <div className="flex-1">
+            <CardContent className="flex items-end justify-center gap-3 pt-6">
+              <div className="w-48">
                 <span className="text-muted-foreground mb-1 block text-xs font-medium">
                   Slot 1
                 </span>
                 <Select value={type1} onValueChange={setType1}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -204,17 +204,17 @@ export function MaterialsPage() {
               </div>
               <button
                 onClick={swap}
-                className="text-muted-foreground hover:text-foreground mt-5 shrink-0 px-1 text-lg transition-colors"
+                className="text-muted-foreground hover:text-foreground flex h-9 shrink-0 items-center px-1 text-lg transition-colors"
                 title="Swap slots"
               >
                 ⇄
               </button>
-              <div className="flex-1">
+              <div className="w-48">
                 <span className="text-muted-foreground mb-1 block text-xs font-medium">
                   Slot 2
                 </span>
                 <Select value={type2} onValueChange={setType2}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -297,7 +297,7 @@ export function MaterialsPage() {
         <p className="text-muted-foreground text-center text-xs">
           Material data based on Jay Tilton's{" "}
           <a
-            href="https://gamefaqs.gamespot.com/ps/914326-vagrant-story/faqs/10457"
+            href="https://gamefaqs.gamespot.com/ps/914326-vagrant-story/faqs/8485"
             className="text-primary hover:underline"
             target="_blank"
             rel="noopener noreferrer"
@@ -356,10 +356,6 @@ function MaterialGrid({
                 <td
                   rowSpan={materials.length}
                   className="text-muted-foreground pr-2 align-middle text-[10px] font-normal"
-                  style={{
-                    writingMode: "vertical-lr",
-                    textOrientation: "mixed",
-                  }}
                 >
                   Slot 1
                 </td>
