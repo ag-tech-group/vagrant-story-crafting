@@ -17,13 +17,32 @@ const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
   undefined
 )
 
+const COOKIE_DOMAIN =
+  window.location.hostname === "localhost" ? undefined : ".criticalbit.gg"
+
+function getCookie(name: string): string | null {
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+function setCookie(name: string, value: string) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    "path=/",
+    "max-age=31536000",
+    "SameSite=Lax",
+  ]
+  if (COOKIE_DOMAIN) parts.push(`domain=${COOKIE_DOMAIN}`)
+  document.cookie = parts.join("; ")
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
-  storageKey = "app_theme",
+  storageKey = "criticalbit_theme",
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    () => (getCookie(storageKey) as Theme) || defaultTheme
   )
 
   useEffect(() => {
@@ -44,7 +63,7 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
+      setCookie(storageKey, theme)
       setTheme(theme)
     },
   }

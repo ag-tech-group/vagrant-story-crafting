@@ -1,0 +1,122 @@
+import { useState } from "react"
+import { Check, ChevronsUpDown, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
+
+export interface PickerItem {
+  name: string
+  type: string
+}
+
+interface ItemPickerProps {
+  items: PickerItem[]
+  value: string | null
+  onSelect: (name: string | null) => void
+  placeholder?: string
+  label?: string
+}
+
+export function ItemPicker({
+  items,
+  value,
+  onSelect,
+  placeholder = "Select item...",
+  label,
+}: ItemPickerProps) {
+  const [open, setOpen] = useState(false)
+
+  // Group items by type
+  const groups = items.reduce<Record<string, PickerItem[]>>((acc, item) => {
+    const group = item.type || "Other"
+    if (!acc[group]) acc[group] = []
+    acc[group].push(item)
+    return acc
+  }, {})
+
+  return (
+    <div className="flex flex-col gap-1">
+      {label && (
+        <span className="text-muted-foreground text-xs font-medium">
+          {label}
+        </span>
+      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="h-auto min-h-12 w-full justify-between px-3 py-2"
+          >
+            {value ? (
+              <div className="flex items-center gap-2">
+                <div className="bg-muted size-8 rounded" />
+                <span className="text-sm font-medium">{value}</span>
+              </div>
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                {placeholder}
+              </span>
+            )}
+            <div className="flex items-center gap-1">
+              {value && (
+                <X
+                  className="text-muted-foreground hover:text-foreground size-4"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSelect(null)
+                  }}
+                />
+              )}
+              <ChevronsUpDown className="text-muted-foreground size-4" />
+            </div>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0" align="start">
+          <Command>
+            <CommandInput placeholder="Search items..." />
+            <CommandList>
+              <CommandEmpty>No items found.</CommandEmpty>
+              {Object.entries(groups).map(([type, groupItems]) => (
+                <CommandGroup key={type} heading={type}>
+                  {groupItems.map((item) => (
+                    <CommandItem
+                      key={item.name}
+                      value={item.name}
+                      onSelect={() => {
+                        onSelect(item.name === value ? null : item.name)
+                        setOpen(false)
+                      }}
+                    >
+                      <div className="bg-muted size-6 rounded" />
+                      <span>{item.name}</span>
+                      <Check
+                        className={cn(
+                          "ml-auto size-4",
+                          value === item.name ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              ))}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
