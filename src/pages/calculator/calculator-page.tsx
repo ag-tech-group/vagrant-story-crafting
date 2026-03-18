@@ -9,11 +9,25 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Plus } from "lucide-react"
+import {
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
+  Plus,
+  RotateCcw,
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ItemPicker, type PickerItem } from "@/components/item-picker"
 import { MaterialSelect } from "@/components/material-select"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { api, type CraftingRecipe, type MaterialRecipe } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -42,6 +56,13 @@ function toMaterialType(apiType: string): string {
   return MATERIAL_TYPE_MAP[apiType] ?? apiType
 }
 
+function computeTier(delta1?: number, delta2?: number): number | undefined {
+  if (delta1 == null && delta2 == null) return undefined
+  if (delta1 == null) return delta2
+  if (delta2 == null) return delta1
+  return Math.min(delta1, delta2)
+}
+
 export function CalculatorPage() {
   const [itemA, setItemA] = useState<string | null>(null)
   const [itemB, setItemB] = useState<string | null>(null)
@@ -49,6 +70,9 @@ export function CalculatorPage() {
   const [materialB, setMaterialB] = useState<string | null>(null)
   const [targetItem, setTargetItem] = useState<string | null>(null)
   const [targetMaterial, setTargetMaterial] = useState<string | null>(null)
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [reverseCategoryFilter, setReverseCategoryFilter] =
+    useState<string>("all")
 
   const { data: weapons = [] } = useQuery({
     queryKey: ["weapons"],
@@ -69,42 +93,75 @@ export function CalculatorPage() {
 
   const fmt = (s: string) => s.replace(/_/g, " ")
 
-  const allItems: PickerItem[] = useMemo(() => {
-    const weaponItems = weapons.map((w) => ({
-      name: fmt(w.field_name),
-      type: w.blade_type,
-    }))
-    const armorItems = armor.map((a) => ({
-      name: fmt(a.field_name),
-      type: a.armor_type,
-    }))
-    const seen = new Set<string>()
-    return [...weaponItems, ...armorItems].filter((item) => {
-      if (seen.has(item.name)) return false
-      seen.add(item.name)
-      return true
-    })
-  }, [weapons, armor])
-
-  // Item name → level (1-indexed position within type, sorted by game_id)
-  const itemLevelMap = useMemo(() => {
-    const map = new Map<string, number>()
-    const byType = new Map<string, { name: string; gameId: number }[]>()
+  // Build item list with levels (position within type, sorted by game_id)
+  const { allItems, itemLevelMap } = useMemo(() => {
+    const byType = new Map<
+      string,
+      { name: string; type: string; gameId: number }[]
+    >()
 
     for (const w of weapons) {
       const type = w.blade_type
       if (!byType.has(type)) byType.set(type, [])
-      byType.get(type)!.push({ name: fmt(w.field_name), gameId: w.game_id })
+      byType
+        .get(type)!
+        .push({ name: fmt(w.field_name), type, gameId: w.game_id })
     }
     for (const a of armor) {
       const type = a.armor_type
       if (!byType.has(type)) byType.set(type, [])
-      byType.get(type)!.push({ name: fmt(a.field_name), gameId: a.game_id })
+      byType
+        .get(type)!
+        .push({ name: fmt(a.field_name), type, gameId: a.game_id })
     }
 
-    for (const items of byType.values()) {
-      items.sort((a, b) => a.gameId - b.gameId)
-      items.forEach((item, i) => map.set(item.name, i + 1))
+    const levelMap = new Map<string, number>()
+    const items: PickerItem[] = []
+    const seen = new Set<string>()
+
+    for (const group of byType.values()) {
+      group.sort((a, b) => a.gameId - b.gameId)
+      group.forEach((item, i) => {
+        levelMap.set(item.name, i + 1)
+        if (!seen.has(item.name)) {
+          seen.add(item.name)
+          items.push({ name: item.name, type: item.type, level: i + 1 })
+        }
+      })
+    }
+
+    return { allItems: items, itemLevelMap: levelMap }
+  }, [weapons, armor])
+
+  type ItemStats = {
+    str: number
+    int: number
+    agi: number
+    range?: number
+    damage?: number
+    risk?: number
+    gem_slots?: number
+  }
+
+  const itemStatsMap = useMemo(() => {
+    const map = new Map<string, ItemStats>()
+    for (const w of weapons) {
+      map.set(fmt(w.field_name), {
+        str: w.str,
+        int: w.int,
+        agi: w.agi,
+        range: w.range,
+        damage: w.damage,
+        risk: w.risk,
+      })
+    }
+    for (const a of armor) {
+      map.set(fmt(a.field_name), {
+        str: a.str,
+        int: a.int,
+        agi: a.agi,
+        gem_slots: a.gem_slots,
+      })
     }
     return map
   }, [weapons, armor])
@@ -131,6 +188,32 @@ export function CalculatorPage() {
     }
     return map
   }, [allItems, recipes])
+
+  const CATEGORY_OPTIONS = [
+    { value: "all", label: "All Equipment" },
+    { value: "weapons", label: "Weapons" },
+    { value: "armor", label: "Armor" },
+    { value: "shields", label: "Shields" },
+  ]
+
+  const filteredItems = useMemo(() => {
+    if (categoryFilter === "all") return allItems
+    const weaponTypes = new Set(weapons.map((w) => w.blade_type))
+    const armorTypes = new Set(
+      armor
+        .filter(
+          (a) => a.armor_type !== "Shield" && a.armor_type !== "Accessory"
+        )
+        .map((a) => a.armor_type)
+    )
+    return allItems.filter((item) => {
+      if (categoryFilter === "weapons") return weaponTypes.has(item.type)
+      if (categoryFilter === "armor") return armorTypes.has(item.type)
+      if (categoryFilter === "shields")
+        return item.type.toLowerCase() === "shield"
+      return true
+    })
+  }, [allItems, categoryFilter, weapons, armor])
 
   // --- Forward calculator ---
   const results: CraftingRecipe[] = useMemo(() => {
@@ -187,10 +270,33 @@ export function CalculatorPage() {
       if (seen.has(r.result)) continue
       seen.add(r.result)
       const match = allItems.find((i) => i.name === r.result)
-      items.push({ name: r.result, type: match?.type ?? r.category })
+      items.push({
+        name: r.result,
+        type: match?.type ?? r.category,
+        level: itemLevelMap.get(r.result),
+      })
     }
     return items
-  }, [recipes, allItems])
+  }, [recipes, allItems, itemLevelMap])
+
+  const reverseFilteredItems = useMemo(() => {
+    if (reverseCategoryFilter === "all") return resultItems
+    const weaponTypes = new Set(weapons.map((w) => w.blade_type))
+    const armorTypes = new Set(
+      armor
+        .filter(
+          (a) => a.armor_type !== "Shield" && a.armor_type !== "Accessory"
+        )
+        .map((a) => a.armor_type)
+    )
+    return resultItems.filter((item) => {
+      if (reverseCategoryFilter === "weapons") return weaponTypes.has(item.type)
+      if (reverseCategoryFilter === "armor") return armorTypes.has(item.type)
+      if (reverseCategoryFilter === "shields")
+        return item.type.toLowerCase() === "shield"
+      return true
+    })
+  }, [resultItems, reverseCategoryFilter, weapons, armor])
 
   const reverseRows = useMemo(() => {
     if (!targetItem) return []
@@ -212,27 +318,35 @@ export function CalculatorPage() {
         }
       }
 
+      const resultType = itemTypeMap.get(r.result)
       const resultLevel = itemLevelMap.get(r.result)
       const level1 = itemLevelMap.get(r.input_1)
       const level2 = itemLevelMap.get(r.input_2)
       const delta1 =
-        resultLevel != null && level1 != null ? resultLevel - level1 : undefined
+        resultLevel != null && level1 != null && type1 === resultType
+          ? resultLevel - level1
+          : undefined
       const delta2 =
-        resultLevel != null && level2 != null ? resultLevel - level2 : undefined
-      let tier: number | undefined
-      if (delta1 != null && delta2 != null) {
-        tier = Math.abs(delta1) >= Math.abs(delta2) ? delta1 : delta2
-      } else {
-        tier = delta1 ?? delta2
-      }
+        resultLevel != null && level2 != null && type2 === resultType
+          ? resultLevel - level2
+          : undefined
+      const tier = computeTier(delta1, delta2)
 
       return {
         id: r.id,
         input_1: r.input_1,
         input_2: r.input_2,
         category: r.category,
-        tier: tier ?? r.tier_change,
+        tier: tier ?? 0,
         materialCombos,
+        searchText: [
+          r.input_1,
+          type1 ?? "",
+          level1 != null ? `Tier ${level1}` : "",
+          r.input_2,
+          type2 ?? "",
+          level2 != null ? `Tier ${level2}` : "",
+        ].join(" "),
       }
     })
   }, [
@@ -256,132 +370,177 @@ export function CalculatorPage() {
       </div>
 
       {/* Forward calculator */}
-      <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:items-stretch">
-        <Card className="w-full flex-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Item 1</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ItemPicker
-              items={allItems}
-              value={itemA}
-              onSelect={setItemA}
-              placeholder="Choose first item..."
-            />
-            <MaterialSelect
-              materials={MATERIALS}
-              value={materialA}
-              onSelect={setMaterialA}
-            />
-          </CardContent>
-        </Card>
-
-        <div className="flex shrink-0 items-center">
-          <Plus className="text-muted-foreground size-10" />
+      <div className="bg-card/50 border-border/50 space-y-6 rounded-xl border p-6">
+        <div className="flex items-center justify-center gap-2">
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            type="button"
+            onClick={() => {
+              setItemA(null)
+              setItemB(null)
+              setMaterialA(null)
+              setMaterialB(null)
+              setCategoryFilter("all")
+            }}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+          >
+            <RotateCcw className="size-3" />
+            Reset
+          </button>
         </div>
+        <div className="flex w-full flex-col items-center gap-6 sm:flex-row sm:items-stretch">
+          <Card className="w-full flex-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Item 1</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ItemPicker
+                items={filteredItems}
+                value={itemA}
+                onSelect={setItemA}
+                placeholder="Choose first item..."
+              />
+              <MaterialSelect
+                materials={MATERIALS}
+                value={materialA}
+                onSelect={setMaterialA}
+              />
+            </CardContent>
+          </Card>
 
-        <Card className="w-full flex-1">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Item 2</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ItemPicker
-              items={allItems}
-              value={itemB}
-              onSelect={setItemB}
-              placeholder="Choose second item..."
-            />
-            <MaterialSelect
-              materials={MATERIALS}
-              value={materialB}
-              onSelect={setMaterialB}
-            />
-          </CardContent>
-        </Card>
+          <div className="flex shrink-0 items-center">
+            <Plus className="text-muted-foreground size-10" />
+          </div>
 
-        <div className="flex shrink-0 items-center">
-          <ArrowRight className="text-primary size-10" />
+          <Card className="w-full flex-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Item 2</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ItemPicker
+                items={filteredItems}
+                value={itemB}
+                onSelect={setItemB}
+                placeholder="Choose second item..."
+              />
+              <MaterialSelect
+                materials={MATERIALS}
+                value={materialB}
+                onSelect={setMaterialB}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="flex shrink-0 items-center">
+            <ArrowRight className="text-primary size-10" />
+          </div>
+
+          <Card className="border-primary/40 flex w-full flex-1 flex-col">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Result</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {results.length > 0 ? (
+                <div className="space-y-4">
+                  {results.map((r) => {
+                    const resultLevel = itemLevelMap.get(r.result)
+                    const resultType = itemTypeMap.get(r.result)
+                    const typeA = itemA ? itemTypeMap.get(itemA) : undefined
+                    const typeB = itemB ? itemTypeMap.get(itemB) : undefined
+                    const fwdLevel1 = itemA
+                      ? itemLevelMap.get(itemA)
+                      : undefined
+                    const fwdLevel2 = itemB
+                      ? itemLevelMap.get(itemB)
+                      : undefined
+                    const fwdDelta1 =
+                      resultLevel != null &&
+                      fwdLevel1 != null &&
+                      typeA === resultType
+                        ? resultLevel - fwdLevel1
+                        : undefined
+                    const fwdDelta2 =
+                      resultLevel != null &&
+                      fwdLevel2 != null &&
+                      typeB === resultType
+                        ? resultLevel - fwdLevel2
+                        : undefined
+                    const tier = computeTier(fwdDelta1, fwdDelta2) ?? 0
+
+                    return (
+                      <div key={r.id} className="space-y-4">
+                        {/* Item name — aligned with ItemPicker */}
+                        <div className="flex h-12 items-center gap-2 rounded-md border px-3">
+                          <div className="bg-muted size-8 shrink-0 rounded" />
+                          <span className="flex-1 text-sm font-medium">
+                            {r.result}
+                          </span>
+                          {resultLevel != null && (
+                            <span className="text-muted-foreground text-xs">
+                              Tier {resultLevel}
+                            </span>
+                          )}
+                          {tier != null && <TierValue value={tier} />}
+                        </div>
+                        {/* Material — always rendered to maintain height */}
+                        <div className="flex h-10 items-center gap-1.5 rounded-md border px-3">
+                          {materialResult ? (
+                            <>
+                              <MaterialBadge
+                                mat={materialResult.result_material}
+                              />
+                              {materialResult.orderMatters && (
+                                <span
+                                  className="text-xs text-amber-400"
+                                  title="Swapping slot order gives a different result"
+                                >
+                                  *
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">
+                              Select materials...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {materialResult?.orderMatters && (
+                    <p className="text-muted-foreground text-xs">
+                      * Slot order affects the result material
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex h-12 items-center justify-center rounded-md border px-3">
+                    <span className="text-muted-foreground text-sm">
+                      {itemA && itemB ? "No recipe found" : "Select two items"}
+                    </span>
+                  </div>
+                  <div className="flex h-10 items-center rounded-md border px-3">
+                    <span className="text-muted-foreground text-xs">
+                      Select materials...
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-
-        <Card className="border-primary/40 flex w-full flex-1 flex-col">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Result</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col justify-center">
-            {results.length > 0 ? (
-              <div className="space-y-3">
-                {results.map((r) => {
-                  const resultLevel = itemLevelMap.get(r.result)
-                  const level1 = itemA ? itemLevelMap.get(itemA) : undefined
-                  const level2 = itemB ? itemLevelMap.get(itemB) : undefined
-                  const delta1 =
-                    resultLevel != null && level1 != null
-                      ? resultLevel - level1
-                      : undefined
-                  const delta2 =
-                    resultLevel != null && level2 != null
-                      ? resultLevel - level2
-                      : undefined
-
-                  return (
-                    <div
-                      key={r.id}
-                      className="flex items-center gap-3 rounded-lg border p-3"
-                    >
-                      <div className="bg-muted size-10 shrink-0 rounded" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">{r.result}</p>
-                        {materialResult && (
-                          <div className="mt-1 flex items-center gap-1.5">
-                            <MaterialBadge
-                              mat={materialResult.result_material}
-                            />
-                            {materialResult.orderMatters && (
-                              <span
-                                className="text-xs text-amber-400"
-                                title="Swapping slot order gives a different result"
-                              >
-                                *
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-sm">
-                        {delta1 != null && delta2 != null ? (
-                          <TierValue
-                            value={
-                              Math.abs(delta1) >= Math.abs(delta2)
-                                ? delta1
-                                : delta2
-                            }
-                          />
-                        ) : delta1 != null ? (
-                          <TierValue value={delta1} />
-                        ) : delta2 != null ? (
-                          <TierValue value={delta2} />
-                        ) : null}
-                      </div>
-                    </div>
-                  )
-                })}
-                {materialResult?.orderMatters && (
-                  <p className="text-muted-foreground text-xs">
-                    * Slot order affects the result material
-                  </p>
-                )}
-              </div>
-            ) : itemA && itemB ? (
-              <p className="text-muted-foreground py-6 text-center">
-                No recipe found for these items
-              </p>
-            ) : (
-              <p className="text-muted-foreground py-6 text-center">
-                Select two items to see results
-              </p>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Reverse lookup */}
@@ -393,10 +552,27 @@ export function CalculatorPage() {
           </p>
         </div>
 
-        <div className="mx-auto flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="w-44 shrink-0">
+            <Select
+              value={reverseCategoryFilter}
+              onValueChange={setReverseCategoryFilter}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex-1">
             <ItemPicker
-              items={resultItems}
+              items={reverseFilteredItems}
               value={targetItem}
               onSelect={setTargetItem}
               placeholder="Search for a result item..."
@@ -409,10 +585,29 @@ export function CalculatorPage() {
               onSelect={setTargetMaterial}
             />
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setTargetItem(null)
+              setTargetMaterial(null)
+              setReverseCategoryFilter("all")
+            }}
+            className="text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 text-xs transition-colors"
+          >
+            <RotateCcw className="size-3" />
+            Reset
+          </button>
         </div>
 
         {targetItem && (
-          <ReverseTable rows={reverseRows} targetMaterial={targetMaterial} />
+          <ReverseTable
+            rows={reverseRows}
+            targetMaterial={targetMaterial}
+            targetItem={targetItem}
+            itemTypeMap={itemTypeMap}
+            itemLevelMap={itemLevelMap}
+            itemStatsMap={itemStatsMap}
+          />
         )}
       </div>
     </div>
@@ -428,14 +623,34 @@ type ReverseRow = {
   category: string
   tier: number
   materialCombos: { mat1: string; mat2: string }[]
+  searchText: string
 }
 
 function ReverseTable({
   rows,
   targetMaterial,
+  targetItem,
+  itemTypeMap,
+  itemLevelMap,
+  itemStatsMap,
 }: {
   rows: ReverseRow[]
   targetMaterial: string | null
+  targetItem: string | null
+  itemTypeMap: Map<string, string>
+  itemLevelMap: Map<string, number>
+  itemStatsMap: Map<
+    string,
+    {
+      str: number
+      int: number
+      agi: number
+      range?: number
+      damage?: number
+      risk?: number
+      gem_slots?: number
+    }
+  >
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState("")
@@ -446,47 +661,47 @@ function ReverseTable({
         accessorKey: "input_1",
         header: "Slot 1",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.input_1}</span>
+          <SlotCell
+            name={row.original.input_1}
+            type={itemTypeMap.get(row.original.input_1)}
+            level={itemLevelMap.get(row.original.input_1)}
+            stats={itemStatsMap.get(row.original.input_1)}
+            materials={
+              targetMaterial
+                ? [
+                    ...new Set(row.original.materialCombos.map((c) => c.mat1)),
+                  ].sort((a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b))
+                : undefined
+            }
+          />
         ),
       },
       {
         accessorKey: "input_2",
         header: "Slot 2",
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.input_2}</span>
+          <SlotCell
+            name={row.original.input_2}
+            type={itemTypeMap.get(row.original.input_2)}
+            level={itemLevelMap.get(row.original.input_2)}
+            stats={itemStatsMap.get(row.original.input_2)}
+            materials={
+              targetMaterial
+                ? [
+                    ...new Set(row.original.materialCombos.map((c) => c.mat2)),
+                  ].sort((a, b) => MATERIALS.indexOf(a) - MATERIALS.indexOf(b))
+                : undefined
+            }
+          />
         ),
       },
-      ...(targetMaterial
-        ? [
-            {
-              id: "materials",
-              header: "Material Paths",
-              enableSorting: false,
-              cell: ({ row }: { row: { original: ReverseRow } }) => {
-                const combos = row.original.materialCombos
-                if (combos.length === 0) return null
-                return (
-                  <div className="space-y-1">
-                    {combos.map((c, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <MaterialBadge mat={c.mat1} />
-                        <span className="text-muted-foreground text-xs">+</span>
-                        <MaterialBadge mat={c.mat2} />
-                      </div>
-                    ))}
-                  </div>
-                )
-              },
-            } satisfies ColumnDef<ReverseRow>,
-          ]
-        : []),
       {
         accessorKey: "tier",
-        header: "Tier",
+        header: "Tier Change",
         cell: ({ getValue }) => <TierValue value={getValue<number>()} />,
       },
     ],
-    [targetMaterial]
+    [targetMaterial, itemTypeMap, itemLevelMap, itemStatsMap]
   )
 
   const table = useReactTable({
@@ -495,6 +710,11 @@ function ReverseTable({
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    globalFilterFn: (row, _columnId, filterValue: string) => {
+      return row.original.searchText
+        .toLowerCase()
+        .includes(filterValue.toLowerCase())
+    },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -513,6 +733,16 @@ function ReverseTable({
           )}
         </CardTitle>
       </CardHeader>
+      {targetItem && (
+        <div className="bg-card border-border/50 sticky top-14 z-10 border-b px-6 py-2">
+          <SlotCell
+            name={targetItem}
+            type={itemTypeMap.get(targetItem)}
+            level={itemLevelMap.get(targetItem)}
+            stats={itemStatsMap.get(targetItem)}
+          />
+        </div>
+      )}
       <CardContent className="space-y-3 overflow-x-auto">
         {rows.length > 0 && (
           <Input
@@ -594,6 +824,58 @@ const MAT_BADGE_COLORS: Record<string, string> = {
   Hagane: "bg-blue-600/60 text-blue-100 border-blue-500/50",
   Silver: "bg-gray-300/70 text-gray-900 border-gray-400/50",
   Damascus: "bg-purple-600/60 text-purple-100 border-purple-500/50",
+}
+
+function SlotCell({
+  name,
+  type,
+  level,
+  stats,
+  materials,
+}: {
+  name: string
+  type?: string
+  level?: number
+  stats?: {
+    str: number
+    int: number
+    agi: number
+    range?: number
+    damage?: number
+    risk?: number
+    gem_slots?: number
+  }
+  materials?: string[]
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <span className="font-medium">{name}</span>
+        {type && <span className="text-muted-foreground text-xs">{type}</span>}
+        {level != null && (
+          <span className="text-muted-foreground text-xs">Tier {level}</span>
+        )}
+      </div>
+      {stats && (
+        <div className="text-muted-foreground mt-0.5 flex flex-wrap gap-x-3 gap-y-0 text-[11px]">
+          <span>STR {stats.str}</span>
+          <span>INT {stats.int}</span>
+          <span>AGI {stats.agi}</span>
+          {stats.range != null && <span>RNG {stats.range}</span>}
+          {stats.damage != null && <span>DMG {stats.damage}</span>}
+          {stats.risk != null && <span>RSK {stats.risk}</span>}
+          {stats.gem_slots != null && <span>Gems {stats.gem_slots}</span>}
+        </div>
+      )}
+      {materials && materials.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {materials.map((m) => (
+            <MaterialBadge key={m} mat={m} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function TierValue({ value }: { value: number }) {

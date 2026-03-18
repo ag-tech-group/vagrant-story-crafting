@@ -22,7 +22,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://vagrant-story-api.criticalbit.gg",
+        target:
+          process.env.VS_API_PROXY ??
+          "https://vagrant-story-api.criticalbit.gg",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },

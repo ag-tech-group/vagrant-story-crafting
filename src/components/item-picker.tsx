@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 export interface PickerItem {
   name: string
   type: string
+  level?: number
 }
 
 interface ItemPickerProps {
@@ -38,13 +39,16 @@ export function ItemPicker({
 }: ItemPickerProps) {
   const [open, setOpen] = useState(false)
 
-  // Group items by type
+  // Group items by type, sorted by level within each group
   const groups = items.reduce<Record<string, PickerItem[]>>((acc, item) => {
     const group = item.type || "Other"
     if (!acc[group]) acc[group] = []
     acc[group].push(item)
     return acc
   }, {})
+  for (const items of Object.values(groups)) {
+    items.sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -62,9 +66,19 @@ export function ItemPicker({
             className="h-auto min-h-12 w-full justify-between px-3 py-2"
           >
             {value ? (
-              <div className="flex items-center gap-2">
-                <div className="bg-muted size-8 rounded" />
-                <span className="text-sm font-medium">{value}</span>
+              <div className="flex flex-1 items-center gap-2">
+                <div className="bg-muted size-8 shrink-0 rounded" />
+                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">
+                  {value}
+                </span>
+                {(() => {
+                  const selected = items.find((i) => i.name === value)
+                  return selected?.level != null ? (
+                    <span className="text-muted-foreground text-xs">
+                      Tier {selected.level}
+                    </span>
+                  ) : null
+                })()}
               </div>
             ) : (
               <span className="text-muted-foreground text-sm">
@@ -114,7 +128,12 @@ export function ItemPicker({
                       }}
                     >
                       <div className="bg-muted size-6 rounded" />
-                      <span>{item.name}</span>
+                      <span className="flex-1">{item.name}</span>
+                      {item.level != null && (
+                        <span className="text-muted-foreground text-xs">
+                          {item.level}
+                        </span>
+                      )}
                       <Check
                         className={cn(
                           "ml-auto size-4",

@@ -239,7 +239,7 @@ export function MaterialsPage() {
                 : `${label(type1)} + ${label(type2)}`}
             </CardTitle>
             <p className="text-muted-foreground text-xs">
-              Column = Slot 1 material · Row = Slot 2 material
+              Cell = result material from combining Slot 1 and Slot 2
             </p>
           </CardHeader>
           <CardContent>
@@ -264,13 +264,15 @@ export function MaterialsPage() {
         {/* Legend */}
         <div className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs">
           <span className="flex items-center gap-1">
-            <span className="font-bold text-green-400">+</span> Upgrade
+            <span className="size-3 rounded-sm border-2 border-green-400" />{" "}
+            Upgrade
           </span>
           <span className="flex items-center gap-1">
-            <span className="font-bold text-red-400">−</span> Downgrade
+            <span className="size-3 rounded-sm border-2 border-red-400" />{" "}
+            Downgrade
           </span>
           <span className="flex items-center gap-1">
-            <span className="text-amber-400">✱</span> Order matters
+            <span className="font-bold text-amber-300">✱</span> Order matters
           </span>
           <span className="mx-1">|</span>
           {materials.map((m) => (
@@ -323,9 +325,16 @@ function MaterialGrid({
       <table className="border-collapse text-center">
         <thead>
           <tr>
-            <th className="p-1.5">
-              <span className="text-muted-foreground text-[10px]">2↓ 1→</span>
+            <th colSpan={2} />
+            <th
+              colSpan={materials.length}
+              className="text-muted-foreground pb-1 text-[10px] font-normal"
+            >
+              Slot 2
             </th>
+          </tr>
+          <tr>
+            <th colSpan={2} />
             {materials.map((m) => (
               <th key={m} className="p-1.5">
                 <div className="flex flex-col items-center gap-1">
@@ -341,23 +350,35 @@ function MaterialGrid({
           </tr>
         </thead>
         <tbody>
-          {materials.map((mat2) => (
-            <tr key={mat2}>
+          {materials.map((mat1, i) => (
+            <tr key={mat1}>
+              {i === 0 && (
+                <td
+                  rowSpan={materials.length}
+                  className="text-muted-foreground pr-2 align-middle text-[10px] font-normal"
+                  style={{
+                    writingMode: "vertical-lr",
+                    textOrientation: "mixed",
+                  }}
+                >
+                  Slot 1
+                </td>
+              )}
               <td className="p-1.5">
                 <div className="flex items-center justify-end gap-1.5">
                   <span className="text-muted-foreground text-[11px] font-medium">
-                    {MAT_SHORT[mat2]}
+                    {MAT_SHORT[mat1]}
                   </span>
                   <span
-                    className={cn("size-2.5 rounded-full", DOT_COLORS[mat2])}
+                    className={cn("size-2.5 rounded-full", DOT_COLORS[mat1])}
                   />
                 </div>
               </td>
-              {materials.map((mat1) => {
+              {materials.map((mat2) => {
                 const cell = grid[mat1]?.[mat2]
                 if (!cell) {
                   return (
-                    <td key={mat1} className="p-1">
+                    <td key={mat2} className="p-1">
                       <div className="bg-muted/30 mx-auto flex size-10 items-center justify-center rounded-md text-xs">
                         —
                       </div>
@@ -376,27 +397,22 @@ function MaterialGrid({
                 const nonComm = rev != null && rev.result !== result
 
                 return (
-                  <td key={mat1} className="p-1">
+                  <td key={mat2} className="p-1">
                     <div
                       className={cn(
-                        "relative mx-auto flex size-10 items-center justify-center rounded-md text-xs font-bold",
-                        CELL_COLORS[result] ?? "bg-muted"
+                        "relative mx-auto flex size-10 items-center justify-center rounded-md text-xs font-bold ring-2 ring-inset",
+                        CELL_COLORS[result] ?? "bg-muted",
+                        upgrade
+                          ? "ring-green-400"
+                          : downgrade
+                            ? "ring-red-400"
+                            : "ring-transparent"
                       )}
-                      title={`${mat1} + ${mat2} → ${result}${upgrade ? " (upgrade)" : ""}${downgrade ? " (downgrade)" : ""}${nonComm ? " (swap gives " + rev!.result + ")" : ""}`}
+                      title={`Slot 1: ${mat1} + Slot 2: ${mat2} → ${result}${upgrade ? " (upgrade)" : ""}${downgrade ? " (downgrade)" : ""}${nonComm ? " (swap gives " + rev!.result + ")" : ""}`}
                     >
                       {MAT_SHORT[result]}
-                      {upgrade && (
-                        <span className="absolute -top-1 right-0 text-[9px] leading-none font-bold text-green-300">
-                          +
-                        </span>
-                      )}
-                      {downgrade && (
-                        <span className="absolute -top-1 right-0 text-[9px] leading-none font-bold text-red-300">
-                          −
-                        </span>
-                      )}
                       {nonComm && (
-                        <span className="absolute right-0 -bottom-0.5 text-[8px] leading-none text-amber-300">
+                        <span className="absolute -top-1 -right-1 text-[10px] leading-none font-bold text-amber-300">
                           ✱
                         </span>
                       )}
