@@ -1,3 +1,4 @@
+import { X } from "lucide-react"
 import {
   Select,
   SelectContent,
@@ -37,26 +38,37 @@ export function MaterialSelect({
           {label}
         </span>
       )}
-      <Select value={value ?? ""} onValueChange={(v) => onSelect(v || null)}>
-        <SelectTrigger className="h-10 w-full">
-          <SelectValue placeholder="Select material..." />
-        </SelectTrigger>
-        <SelectContent>
-          {materials.map((mat) => (
-            <SelectItem key={mat} value={mat}>
-              <div className="flex items-center gap-2">
-                <div
-                  className={cn(
-                    "size-3 rounded-full",
-                    MATERIAL_COLORS[mat] || "bg-muted"
-                  )}
-                />
-                {mat}
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="relative">
+        <Select value={value ?? ""} onValueChange={(v) => onSelect(v || null)}>
+          <SelectTrigger className="h-10 w-full">
+            <SelectValue placeholder="Select material..." />
+          </SelectTrigger>
+          <SelectContent>
+            {materials.map((mat) => (
+              <SelectItem key={mat} value={mat}>
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "size-3 rounded-full",
+                      MATERIAL_COLORS[mat] || "bg-muted"
+                    )}
+                  />
+                  {mat}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {value && (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground absolute top-1/2 right-8 -translate-y-1/2"
+            onClick={() => onSelect(null)}
+          >
+            <X className="size-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
