@@ -291,6 +291,19 @@ export function MaterialsPage() {
             {category === "Shields" && <ShieldNotes />}
           </CardContent>
         </Card>
+        {/* Attribution */}
+        <p className="text-muted-foreground text-center text-xs">
+          Material data based on Jay Tilton's{" "}
+          <a
+            href="https://gamefaqs.gamespot.com/ps/914326-vagrant-story/faqs/10457"
+            className="text-primary hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Combination Guide
+          </a>{" "}
+          (GameFAQs, 2000)
+        </p>
       </div>
     </div>
   )

@@ -3,13 +3,15 @@ import { useQuery } from "@tanstack/react-query"
 import {
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { ArrowRight, ChevronsUpDown, Plus } from "lucide-react"
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Plus } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { ItemPicker, type PickerItem } from "@/components/item-picker"
 import { MaterialSelect } from "@/components/material-select"
 import { api, type CraftingRecipe, type MaterialRecipe } from "@/lib/api"
@@ -343,6 +345,7 @@ function ReverseTable({
   targetMaterial: string | null
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
+  const [globalFilter, setGlobalFilter] = useState("")
 
   const columns = useMemo<ColumnDef<ReverseRow>[]>(
     () => [
@@ -404,10 +407,12 @@ function ReverseTable({
   const table = useReactTable({
     data: rows,
     columns,
-    state: { sorting },
+    state: { sorting, globalFilter },
     onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
   })
 
   return (
@@ -423,7 +428,15 @@ function ReverseTable({
           )}
         </CardTitle>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
+      <CardContent className="space-y-3 overflow-x-auto">
+        {rows.length > 0 && (
+          <Input
+            placeholder="Filter results..."
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="max-w-sm"
+          />
+        )}
         {rows.length > 0 ? (
           <table className="w-full text-sm">
             <thead>
@@ -446,7 +459,7 @@ function ReverseTable({
                           header.getContext()
                         )}
                         {header.column.getCanSort() && (
-                          <ChevronsUpDown className="text-muted-foreground/50 size-3.5" />
+                          <SortIcon sorted={header.column.getIsSorted()} />
                         )}
                       </span>
                     </th>
@@ -496,6 +509,12 @@ const MAT_BADGE_COLORS: Record<string, string> = {
   Hagane: "bg-blue-600/60 text-blue-100 border-blue-500/50",
   Silver: "bg-gray-300/70 text-gray-900 border-gray-400/50",
   Damascus: "bg-purple-600/60 text-purple-100 border-purple-500/50",
+}
+
+function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
+  if (sorted === "asc") return <ArrowUp className="size-3.5" />
+  if (sorted === "desc") return <ArrowDown className="size-3.5" />
+  return <ArrowUpDown className="text-muted-foreground/50 size-3.5" />
 }
 
 function MaterialBadge({ mat }: { mat: string }) {
