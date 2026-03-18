@@ -393,7 +393,7 @@ export function CalculatorPage() {
           </p>
         </div>
 
-        <div className="mx-auto flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="mx-auto flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex-1">
             <ItemPicker
               items={resultItems}
