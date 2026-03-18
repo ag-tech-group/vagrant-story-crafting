@@ -86,6 +86,29 @@ export function CalculatorPage() {
     })
   }, [weapons, armor])
 
+  // Item name → level (1-indexed position within type, sorted by game_id)
+  const itemLevelMap = useMemo(() => {
+    const map = new Map<string, number>()
+    const byType = new Map<string, { name: string; gameId: number }[]>()
+
+    for (const w of weapons) {
+      const type = w.blade_type
+      if (!byType.has(type)) byType.set(type, [])
+      byType.get(type)!.push({ name: fmt(w.field_name), gameId: w.game_id })
+    }
+    for (const a of armor) {
+      const type = a.armor_type
+      if (!byType.has(type)) byType.set(type, [])
+      byType.get(type)!.push({ name: fmt(a.field_name), gameId: a.game_id })
+    }
+
+    for (const items of byType.values()) {
+      items.sort((a, b) => a.gameId - b.gameId)
+      items.forEach((item, i) => map.set(item.name, i + 1))
+    }
+    return map
+  }, [weapons, armor])
+
   const itemTypeMap = useMemo(() => {
     const map = new Map<string, string>()
     for (const item of allItems) map.set(item.name, toMaterialType(item.type))
@@ -119,21 +142,42 @@ export function CalculatorPage() {
     )
   }, [itemA, itemB, recipes])
 
-  const materialResult: MaterialRecipe | null = useMemo(() => {
-    if (!materialA || !materialB || !itemA || !itemB) return null
-    const typeA = itemTypeMap.get(itemA)
-    const typeB = itemTypeMap.get(itemB)
-    if (!typeA || !typeB) return null
-    return (
-      materialRecipes.find(
+  const materialResult: (MaterialRecipe & { orderMatters: boolean }) | null =
+    useMemo(() => {
+      if (!materialA || !materialB || !itemA || !itemB) return null
+      const typeA = itemTypeMap.get(itemA)
+      const typeB = itemTypeMap.get(itemB)
+      if (!typeA || !typeB) return null
+      const match =
+        materialRecipes.find(
+          (r) =>
+            r.input_1 === typeA &&
+            r.input_2 === typeB &&
+            r.material_1 === materialA &&
+            r.material_2 === materialB
+        ) ||
+        materialRecipes.find(
+          (r) =>
+            r.input_1 === typeB &&
+            r.input_2 === typeA &&
+            r.material_1 === materialB &&
+            r.material_2 === materialA
+        )
+      if (!match) return null
+
+      // Check if swapping slot order gives a different result
+      const swapped = materialRecipes.find(
         (r) =>
-          ((r.input_1 === typeA && r.input_2 === typeB) ||
-            (r.input_1 === typeB && r.input_2 === typeA)) &&
-          ((r.material_1 === materialA && r.material_2 === materialB) ||
-            (r.material_1 === materialB && r.material_2 === materialA))
-      ) || null
-    )
-  }, [materialA, materialB, itemA, itemB, itemTypeMap, materialRecipes])
+          r.input_1 === typeA &&
+          r.input_2 === typeB &&
+          r.material_1 === materialB &&
+          r.material_2 === materialA
+      )
+      const orderMatters =
+        swapped != null && swapped.result_material !== match.result_material
+
+      return { ...match, orderMatters }
+    }, [materialA, materialB, itemA, itemB, itemTypeMap, materialRecipes])
 
   // --- Reverse lookup ---
   const resultItems: PickerItem[] = useMemo(() => {
@@ -168,16 +212,37 @@ export function CalculatorPage() {
         }
       }
 
+      const resultLevel = itemLevelMap.get(r.result)
+      const level1 = itemLevelMap.get(r.input_1)
+      const level2 = itemLevelMap.get(r.input_2)
+      const delta1 =
+        resultLevel != null && level1 != null ? resultLevel - level1 : undefined
+      const delta2 =
+        resultLevel != null && level2 != null ? resultLevel - level2 : undefined
+      let tier: number | undefined
+      if (delta1 != null && delta2 != null) {
+        tier = Math.abs(delta1) >= Math.abs(delta2) ? delta1 : delta2
+      } else {
+        tier = delta1 ?? delta2
+      }
+
       return {
         id: r.id,
         input_1: r.input_1,
         input_2: r.input_2,
         category: r.category,
-        tier_change: r.tier_change,
+        tier: tier ?? r.tier_change,
         materialCombos,
       }
     })
-  }, [targetItem, targetMaterial, recipes, itemTypeMap, materialRecipes])
+  }, [
+    targetItem,
+    targetMaterial,
+    recipes,
+    itemTypeMap,
+    itemLevelMap,
+    materialRecipes,
+  ])
 
   return (
     <div className="flex flex-1 flex-col gap-8 p-6 lg:p-10">
@@ -247,34 +312,65 @@ export function CalculatorPage() {
           <CardContent className="flex flex-1 flex-col justify-center">
             {results.length > 0 ? (
               <div className="space-y-3">
-                {results.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
-                  >
-                    <div className="bg-muted size-10 shrink-0 rounded" />
-                    <div>
-                      <p className="font-medium">{r.result}</p>
-                      <p className="text-muted-foreground text-sm">
-                        Tier{" "}
-                        {r.tier_change > 0
-                          ? `+${r.tier_change}`
-                          : r.tier_change}
-                      </p>
+                {results.map((r) => {
+                  const resultLevel = itemLevelMap.get(r.result)
+                  const level1 = itemA ? itemLevelMap.get(itemA) : undefined
+                  const level2 = itemB ? itemLevelMap.get(itemB) : undefined
+                  const delta1 =
+                    resultLevel != null && level1 != null
+                      ? resultLevel - level1
+                      : undefined
+                  const delta2 =
+                    resultLevel != null && level2 != null
+                      ? resultLevel - level2
+                      : undefined
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="flex items-center gap-3 rounded-lg border p-3"
+                    >
+                      <div className="bg-muted size-10 shrink-0 rounded" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{r.result}</p>
+                        {materialResult && (
+                          <div className="mt-1 flex items-center gap-1.5">
+                            <MaterialBadge
+                              mat={materialResult.result_material}
+                            />
+                            {materialResult.orderMatters && (
+                              <span
+                                className="text-xs text-amber-400"
+                                title="Swapping slot order gives a different result"
+                              >
+                                *
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-sm">
+                        {delta1 != null && delta2 != null ? (
+                          <TierValue
+                            value={
+                              Math.abs(delta1) >= Math.abs(delta2)
+                                ? delta1
+                                : delta2
+                            }
+                          />
+                        ) : delta1 != null ? (
+                          <TierValue value={delta1} />
+                        ) : delta2 != null ? (
+                          <TierValue value={delta2} />
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {materialResult && (
-                  <div className="border-t pt-3">
-                    <p className="text-sm">
-                      <span className="text-muted-foreground">Material: </span>
-                      {materialResult.material_1} + {materialResult.material_2}{" "}
-                      →{" "}
-                      <span className="font-medium">
-                        {materialResult.result_material}
-                      </span>
-                    </p>
-                  </div>
+                  )
+                })}
+                {materialResult?.orderMatters && (
+                  <p className="text-muted-foreground text-xs">
+                    * Slot order affects the result material
+                  </p>
                 )}
               </div>
             ) : itemA && itemB ? (
@@ -333,7 +429,7 @@ type ReverseRow = {
   input_1: string
   input_2: string
   category: string
-  tier_change: number
+  tier: number
   materialCombos: { mat1: string; mat2: string }[]
 }
 
@@ -388,17 +484,9 @@ function ReverseTable({
           ]
         : []),
       {
-        accessorKey: "tier_change",
+        accessorKey: "tier",
         header: "Tier",
-        cell: ({ getValue }) => {
-          const v = getValue<number>()
-          if (v === 0) return <span className="text-muted-foreground">0</span>
-          return (
-            <span className={v > 0 ? "text-green-400" : "text-red-400"}>
-              {v > 0 ? `+${v}` : v}
-            </span>
-          )
-        },
+        cell: ({ getValue }) => <TierValue value={getValue<number>()} />,
       },
     ],
     [targetMaterial]
@@ -509,6 +597,15 @@ const MAT_BADGE_COLORS: Record<string, string> = {
   Hagane: "bg-blue-600/60 text-blue-100 border-blue-500/50",
   Silver: "bg-gray-300/70 text-gray-900 border-gray-400/50",
   Damascus: "bg-purple-600/60 text-purple-100 border-purple-500/50",
+}
+
+function TierValue({ value }: { value: number }) {
+  if (value === 0) return <span className="text-muted-foreground">0</span>
+  return (
+    <span className={value > 0 ? "text-green-400" : "text-red-400"}>
+      {value > 0 ? `+${value}` : value}
+    </span>
+  )
 }
 
 function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
