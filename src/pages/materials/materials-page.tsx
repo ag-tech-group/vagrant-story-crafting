@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo } from "react"
+import { getRouteApi } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -121,10 +122,33 @@ function buildLookup(recipes: MaterialRecipe[]): Lookup {
   return out
 }
 
+const routeApi = getRouteApi("/materials")
+
 export function MaterialsPage() {
-  const [category, setCategory] = useState<Category>("Blades")
-  const [type1, setType1] = useState("Heavy Mace")
-  const [type2, setType2] = useState("Heavy Mace")
+  const search = routeApi.useSearch()
+  const navigate = routeApi.useNavigate()
+
+  const updateSearch = useCallback(
+    (updates: Record<string, string | undefined>) =>
+      navigate({
+        search: (prev: Record<string, string | undefined>) => {
+          const next = { ...prev, ...updates }
+          for (const key of Object.keys(next)) {
+            if (!next[key]) delete next[key]
+          }
+          return next
+        },
+        replace: true,
+      }),
+    [navigate]
+  )
+
+  const category: Category = (
+    CATEGORIES.includes(search.cat as Category) ? search.cat : "Blades"
+  ) as Category
+  const types = getTypes(category)
+  const type1 = search.t1 && types.includes(search.t1) ? search.t1 : types[0]
+  const type2 = search.t2 && types.includes(search.t2) ? search.t2 : types[0]
 
   const { data: recipes = [], isLoading } = useQuery({
     queryKey: ["material-recipes"],
@@ -134,18 +158,20 @@ export function MaterialsPage() {
   const lookup = useMemo(() => buildLookup(recipes), [recipes])
 
   const materials = getMaterials(category)
-  const types = getTypes(category)
 
   const changeCategory = (cat: Category) => {
-    setCategory(cat)
-    const t = getTypes(cat)
-    setType1(t[0])
-    setType2(t[0])
+    updateSearch({
+      cat: cat === "Blades" ? undefined : cat,
+      t1: undefined,
+      t2: undefined,
+    })
   }
 
   const swap = () => {
-    setType1(type2)
-    setType2(type1)
+    updateSearch({
+      t1: type2 === types[0] ? undefined : type2,
+      t2: type1 === types[0] ? undefined : type1,
+    })
   }
 
   const grid = lookup[type1]?.[type2]
@@ -189,7 +215,12 @@ export function MaterialsPage() {
                 <span className="text-muted-foreground mb-1 block text-xs font-medium">
                   Slot 1
                 </span>
-                <Select value={type1} onValueChange={setType1}>
+                <Select
+                  value={type1}
+                  onValueChange={(v) =>
+                    updateSearch({ t1: v === types[0] ? undefined : v })
+                  }
+                >
                   <SelectTrigger className="w-48">
                     <SelectValue />
                   </SelectTrigger>
@@ -213,7 +244,12 @@ export function MaterialsPage() {
                 <span className="text-muted-foreground mb-1 block text-xs font-medium">
                   Slot 2
                 </span>
-                <Select value={type2} onValueChange={setType2}>
+                <Select
+                  value={type2}
+                  onValueChange={(v) =>
+                    updateSearch({ t2: v === types[0] ? undefined : v })
+                  }
+                >
                   <SelectTrigger className="w-48">
                     <SelectValue />
                   </SelectTrigger>
