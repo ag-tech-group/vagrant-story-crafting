@@ -73,19 +73,31 @@ export function ItemPicker({
             )}
             <div className="flex items-center gap-1">
               {value && (
-                <X
-                  className="text-muted-foreground hover:text-foreground size-4"
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground"
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                  }}
                   onClick={(e) => {
+                    e.preventDefault()
                     e.stopPropagation()
                     onSelect(null)
+                    setOpen(false)
                   }}
-                />
+                >
+                  <X className="size-4" />
+                </button>
               )}
               <ChevronsUpDown className="text-muted-foreground size-4" />
             </div>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0" align="start">
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] p-0"
+          align="start"
+        >
           <Command>
             <CommandInput placeholder="Search items..." />
             <CommandList>
