@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from "react"
 import { getRouteApi } from "@tanstack/react-router"
 import { useQuery } from "@tanstack/react-query"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -207,78 +208,69 @@ export function MaterialsPage() {
           ))}
         </div>
 
-        {/* Type pair selector */}
-        {category !== "Shields" && (
-          <Card>
-            <CardContent className="flex items-end justify-center gap-3 pt-6">
-              <div className="w-48">
-                <span className="text-muted-foreground mb-1 block text-xs font-medium">
-                  Slot 1
-                </span>
-                <Select
-                  value={type1}
-                  onValueChange={(v) =>
-                    updateSearch({ t1: v === types[0] ? undefined : v })
-                  }
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {types.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {label(t)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <button
-                onClick={swap}
-                className="text-muted-foreground hover:text-foreground flex h-9 shrink-0 items-center px-1 text-lg transition-colors"
-                title="Swap slots"
-              >
-                ⇄
-              </button>
-              <div className="w-48">
-                <span className="text-muted-foreground mb-1 block text-xs font-medium">
-                  Slot 2
-                </span>
-                <Select
-                  value={type2}
-                  onValueChange={(v) =>
-                    updateSearch({ t2: v === types[0] ? undefined : v })
-                  }
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {types.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {label(t)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Material Grid */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">
-              {category === "Shields"
-                ? "Shield Materials"
-                : `${label(type1)} + ${label(type2)}`}
-            </CardTitle>
-            <p className="text-muted-foreground text-xs">
+          <CardContent className="space-y-4 pt-6">
+            {category !== "Shields" && (
+              <div className="flex items-end justify-center gap-3">
+                <div className="w-48">
+                  <span className="text-muted-foreground mb-1 block text-xs font-medium">
+                    Slot 1
+                  </span>
+                  <Select
+                    value={type1}
+                    onValueChange={(v) =>
+                      updateSearch({ t1: v === types[0] ? undefined : v })
+                    }
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {label(t)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={swap}
+                  className="shrink-0 text-lg"
+                  title="Swap slots"
+                >
+                  ⇄
+                </Button>
+                <div className="w-48">
+                  <span className="text-muted-foreground mb-1 block text-xs font-medium">
+                    Slot 2
+                  </span>
+                  <Select
+                    value={type2}
+                    onValueChange={(v) =>
+                      updateSearch({ t2: v === types[0] ? undefined : v })
+                    }
+                  >
+                    <SelectTrigger className="w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {types.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {label(t)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            <p className="text-muted-foreground text-center text-xs">
               Cell = result material from combining Slot 1 and Slot 2
             </p>
-          </CardHeader>
-          <CardContent>
             {isLoading ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
                 Loading...
@@ -288,6 +280,8 @@ export function MaterialsPage() {
                 grid={grid}
                 reverseGrid={reverseGrid}
                 materials={materials}
+                type1Label={label(type1)}
+                type2Label={label(type2)}
               />
             ) : (
               <p className="text-muted-foreground py-8 text-center text-sm">
@@ -351,10 +345,14 @@ function MaterialGrid({
   grid,
   reverseGrid,
   materials,
+  type1Label,
+  type2Label,
 }: {
   grid: Record<string, Record<string, Cell>>
   reverseGrid?: Record<string, Record<string, Cell>>
   materials: string[]
+  type1Label?: string
+  type2Label?: string
 }) {
   return (
     <div className="flex justify-center overflow-x-auto">
@@ -364,9 +362,14 @@ function MaterialGrid({
             <th colSpan={2} />
             <th
               colSpan={materials.length}
-              className="text-muted-foreground pb-1 text-[10px] font-normal"
+              className="text-muted-foreground pb-1 font-normal"
             >
-              Slot 2
+              <div className="text-xs">Slot 2</div>
+              {type2Label && (
+                <div className="text-xs font-medium opacity-60">
+                  {type2Label}
+                </div>
+              )}
             </th>
           </tr>
           <tr>
@@ -391,9 +394,14 @@ function MaterialGrid({
               {i === 0 && (
                 <td
                   rowSpan={materials.length}
-                  className="text-muted-foreground pr-2 align-middle text-[10px] font-normal"
+                  className="text-muted-foreground pr-2 align-middle font-normal"
                 >
-                  Slot 1
+                  <div className="text-xs">Slot 1</div>
+                  {type1Label && (
+                    <div className="text-xs font-medium opacity-60">
+                      {type1Label}
+                    </div>
+                  )}
                 </td>
               )}
               <td className="p-1.5">
@@ -440,7 +448,7 @@ function MaterialGrid({
                             ? "ring-red-400"
                             : "ring-transparent"
                       )}
-                      title={`Slot 1: ${mat1} + Slot 2: ${mat2} → ${result}${upgrade ? " (upgrade)" : ""}${downgrade ? " (downgrade)" : ""}${nonComm ? " (swap gives " + rev!.result + ")" : ""}`}
+                      title={`Slot 1: ${mat1} + Slot 2: ${mat2} → ${result}${upgrade ? " (upgrade)" : ""}${downgrade ? " (downgrade)" : ""}${nonComm ? ` (swapping slots gives ${rev!.result} instead)` : ""}`}
                     >
                       {MAT_SHORT[result]}
                       {nonComm && (
