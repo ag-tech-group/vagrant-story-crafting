@@ -19,6 +19,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ItemPicker, type PickerItem } from "@/components/item-picker"
@@ -44,8 +45,27 @@ const TYPE_LABELS: Record<string, string> = {
   AxeMace: "Axe / Mace",
 }
 
+const WEAPON_HANDS: Record<string, string> = {
+  Dagger: "1H",
+  Sword: "1H",
+  Axe: "1H",
+  Mace: "1H",
+  "Great Sword": "2H",
+  "Great Axe": "2H",
+  "Heavy Mace": "2H",
+  Polearm: "2H",
+  Staff: "2H",
+  Crossbow: "2H",
+}
+
 function typeLabel(type: string) {
   return TYPE_LABELS[type] ?? type
+}
+
+function typeLabelWithHands(type: string) {
+  const label = TYPE_LABELS[type] ?? type
+  const hands = WEAPON_HANDS[type]
+  return hands ? `${label} · ${hands}` : label
 }
 
 const ALL_MATERIALS = [
@@ -118,7 +138,13 @@ export function CalculatorPage() {
   const setTargetMaterial = (v: string | null) =>
     updateSearch({ tmat: v || undefined })
   const setCategoryFilter = (v: string) =>
-    updateSearch({ cat: v === "all" ? undefined : v })
+    updateSearch({
+      cat: v === "all" ? undefined : v,
+      s1: undefined,
+      s2: undefined,
+      m1: undefined,
+      m2: undefined,
+    })
   const setReverseCategoryFilter = (v: string) =>
     updateSearch({ rcat: v === "all" ? undefined : v })
 
@@ -248,6 +274,16 @@ export function CalculatorPage() {
     }
     return map
   }, [allItems, recipes])
+
+  // Map item name → 1H/2H for weapon badges
+  const itemHandsMap = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const w of weapons) {
+      const hands = WEAPON_HANDS[w.blade_type]
+      if (hands) map.set(fmt(w.field_name), hands)
+    }
+    return map
+  }, [weapons])
 
   // Map item name → equipment category for material filtering
   const equipCategoryMap = useMemo(() => {
@@ -509,8 +545,24 @@ export function CalculatorPage() {
             materialData={materialA ? materialMap.get(materialA) : undefined}
           />
 
-          <div className="flex shrink-0 items-center">
-            <Plus className="text-muted-foreground size-10" />
+          <div className="flex shrink-0 flex-col items-center justify-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                updateSearch({
+                  s1: itemB || undefined,
+                  s2: itemA || undefined,
+                  m1: materialB || undefined,
+                  m2: materialA || undefined,
+                })
+              }
+              className="text-lg"
+              title="Swap slots"
+            >
+              ⇄
+            </Button>
+            <Plus className="text-muted-foreground size-6" />
           </div>
 
           <ItemCard
@@ -568,7 +620,7 @@ export function CalculatorPage() {
                         </span>
                         {resultType && (
                           <span className="text-muted-foreground shrink-0 text-xs">
-                            {typeLabel(resultType)}
+                            {typeLabelWithHands(resultType)}
                           </span>
                         )}
                       </div>
@@ -664,7 +716,7 @@ export function CalculatorPage() {
                   setTargetMaterial(null)
               }}
               placeholder="Search for a result item..."
-              formatType={typeLabel}
+              formatType={typeLabelWithHands}
             />
           </div>
           <div className="sm:w-48">
@@ -697,6 +749,7 @@ export function CalculatorPage() {
             targetItem={targetItem}
             itemTypeMap={itemTypeMap}
             itemStatsMap={itemStatsMap}
+            itemHandsMap={itemHandsMap}
             onLoadRecipe={(input1, input2, mat1, mat2) => {
               updateSearch({
                 s1: input1 || undefined,
@@ -750,7 +803,7 @@ function ItemCard({
           value={value}
           onSelect={onSelect}
           placeholder={`Choose ${title.toLowerCase()}...`}
-          formatType={typeLabel}
+          formatType={typeLabelWithHands}
         />
         <MaterialSelect
           materials={availableMaterials}
@@ -786,6 +839,7 @@ function ReverseTable({
   targetItem,
   itemTypeMap,
   itemStatsMap,
+  itemHandsMap,
   onLoadRecipe,
 }: {
   rows: ReverseRow[]
@@ -793,6 +847,7 @@ function ReverseTable({
   targetItem: string | null
   itemTypeMap: Map<string, string>
   itemStatsMap: Map<string, ItemStats>
+  itemHandsMap: Map<string, string>
   onLoadRecipe: (
     input1: string,
     input2: string,
@@ -813,6 +868,7 @@ function ReverseTable({
           <SlotCell
             name={row.original.input_1}
             type={itemTypeMap.get(row.original.input_1)}
+            hands={itemHandsMap.get(row.original.input_1)}
             stats={itemStatsMap.get(row.original.input_1)}
             compareWith={resultStats}
             materials={
@@ -835,6 +891,7 @@ function ReverseTable({
           <SlotCell
             name={row.original.input_2}
             type={itemTypeMap.get(row.original.input_2)}
+            hands={itemHandsMap.get(row.original.input_2)}
             stats={itemStatsMap.get(row.original.input_2)}
             compareWith={resultStats}
             materials={
@@ -851,7 +908,7 @@ function ReverseTable({
         ),
       },
     ],
-    [targetMaterial, itemTypeMap, itemStatsMap, resultStats]
+    [targetMaterial, itemTypeMap, itemStatsMap, itemHandsMap, resultStats]
   )
 
   const table = useReactTable({
@@ -888,6 +945,7 @@ function ReverseTable({
             <SlotCell
               name={targetItem}
               type={itemTypeMap.get(targetItem)}
+              hands={itemHandsMap.get(targetItem)}
               stats={itemStatsMap.get(targetItem)}
             />
           </div>
@@ -1007,12 +1065,14 @@ const MAT_BADGE_COLORS: Record<string, string> = {
 function SlotCell({
   name,
   type,
+  hands,
   stats,
   compareWith,
   materials,
 }: {
   name: string
   type?: string
+  hands?: string
   stats?: ItemStats
   compareWith?: ItemStats
   materials?: string[]
@@ -1025,6 +1085,7 @@ function SlotCell({
         {type && (
           <span className="text-muted-foreground text-xs">
             {typeLabel(type)}
+            {hands && ` · ${hands}`}
           </span>
         )}
       </div>
