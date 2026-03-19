@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   Plus,
   RotateCcw,
+  Search,
   X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -591,8 +592,30 @@ export function CalculatorPage() {
           </div>
 
           <Card className="border-primary/40 flex w-full flex-1 flex-col">
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-base">Result</CardTitle>
+              {results.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const r = results[0]
+                    updateSearch({
+                      target: r.result,
+                      tmat: materialResult?.result_material || undefined,
+                      rcat: undefined,
+                    })
+                    document
+                      .getElementById("reverse-lookup")
+                      ?.scrollIntoView({ behavior: "smooth" })
+                  }}
+                  title="Find in reverse lookup"
+                  className="h-7 gap-1 px-2 text-xs"
+                >
+                  <Search className="size-3" />
+                  Reverse lookup
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-3">
               {results.length > 0 ? (
@@ -676,7 +699,7 @@ export function CalculatorPage() {
       </div>
 
       {/* Reverse lookup */}
-      <div className="w-full space-y-4">
+      <div id="reverse-lookup" className="w-full space-y-4">
         <div className="text-center">
           <h2 className="text-2xl tracking-wide sm:text-3xl">Reverse Lookup</h2>
           <p className="text-muted-foreground mt-1 text-sm">
